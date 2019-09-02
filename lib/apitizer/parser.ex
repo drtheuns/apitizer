@@ -5,14 +5,15 @@ defmodule Apitizer.Parser do
 
   ## Example
 
-      iex> filter("and(grade.gte.90,student.is.true,or(age.gte.14,age.is.null))")
-      [and: [{:gte, "grade}, 90.0}, {:is, "student", true}, {:or, [{:gte, "age", 14.0}, {:is, "age", nil}]}]]
+      iex> parse_filter("and(grade.gte.90,student.eq.true,or(age.gte.14,age.eq.null))")
+      [and: [{:gte, "grade}, 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]]
   """
+  # See the `test/apitizer/parser_test.exs` for many more examples.
   import NimbleParsec
 
   # Order of these is importants, as "gt" would match before "gte".
   # the "in" operator is special as it requires a different value.
-  @operators ["eq", "gte", "gt", "lte", "lt", "neq", "is"]
+  @operators ["eq", "gte", "gt", "lte", "lt", "neq"]
 
   skip_space = ignore(ascii_char([?\s, ?\t, ?\r, ?\n]))
 
@@ -40,7 +41,7 @@ defmodule Apitizer.Parser do
     |> ignore(string(")"))
 
   # Examples:
-  # student.is.true -> {:is, "student", true}
+  # student.eq.true -> {:eq, "student", true}
   # grade.gte.90    -> {:gte, "grade", 90}
   # id.in.(1,2,3)   -> {:in, "id", [1.0, 2.0, 3.0]}
   boolean_expr =
@@ -91,8 +92,8 @@ defmodule Apitizer.Parser do
 
   Example:
 
-  iex> parse_filter("and(student.is.true,grade.gte.90)")
-  [and: [{:is, "student", true}, {:gte, "grade", 90}]]
+  iex> parse_filter("and(student.eq.true,grade.gte.90)")
+  [and: [{:eq, "student", true}, {:gte, "grade", 90}]]
 
   See `test/apitizer/parser_test.exs` for more examples.
   """
@@ -111,9 +112,11 @@ defmodule Apitizer.Parser do
     {operator, field, cast_value(operator, value)}
   end
 
-  defp cast_value(:is, "null"), do: nil
-  defp cast_value(:is, "true"), do: true
-  defp cast_value(:is, "false"), do: false
+  defp cast_value(_, {:quoted, value}), do: value
+
+  defp cast_value(op, "null") when op in [:eq, :neq], do: nil
+  defp cast_value(op, "true") when op in [:eq, :neq], do: true
+  defp cast_value(op, "false") when op in [:eq, :neq], do: false
 
   defp cast_value(op, value) when op in [:gte, :gt, :lte, :lt, :eq, :neq], do: maybe_number(value)
 

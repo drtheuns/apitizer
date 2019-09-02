@@ -6,8 +6,8 @@ defmodule Apitizer.ParserTest do
   end
 
   test "it should parse comparison expressions" do
-    assert filter("and(student.is.true, grade.gte.90)") ==
-             [{:and, [{:is, "student", true}, {:gte, "grade", 90}]}]
+    assert filter("and(student.eq.true, grade.gte.90)") ==
+             [{:and, [{:eq, "student", true}, {:gte, "grade", 90}]}]
 
     assert filter("and(name.eq.john,grade.in.(1,2,3))") ==
              [and: [{:eq, "name", "john"}, {:in, "grade", [1, 2, 3]}]]
@@ -23,14 +23,14 @@ defmodule Apitizer.ParserTest do
              ]
 
     assert filter(
-             "and(something.eq.wow, switch.is.true, or(value.gte.5,value.lte.2), and(field.is.true, name.is.null))"
+             "and(something.eq.wow, switch.eq.true, or(value.gte.5,value.lte.2), and(field.eq.true, name.eq.null))"
            ) ==
              [
                and: [
                  {:eq, "something", "wow"},
-                 {:is, "switch", true},
+                 {:eq, "switch", true},
                  {:or, [{:gte, "value", 5}, {:lte, "value", 2}]},
-                 {:and, [{:is, "field", true}, {:is, "name", nil}]}
+                 {:and, [{:eq, "field", true}, {:eq, "name", nil}]}
                ]
              ]
 
@@ -57,25 +57,45 @@ defmodule Apitizer.ParserTest do
              and: [{:in, "field", ["hello, world", "5"]}]
            ]
 
-    # quoted expressions don't cast values.
     assert filter("and(name.eq.\"Doe, John\", id.eq.\"5\")") == [
              and: [{:eq, "name", "Doe, John"}, {:eq, "id", "5"}]
            ]
   end
 
-  test "integers should be cast to integers" do
-    [and: [{:in, "id", values}]] = filter("and(id.in.(1,2,3))")
+  describe "casting" do
+    test "integers should be cast to integers" do
+      [and: [{:in, "id", values}]] = filter("and(id.in.(1,2,3))")
 
-    Enum.each(values, fn value ->
-      assert is_integer(value)
-    end)
-  end
+      Enum.each(values, fn value ->
+        assert is_integer(value)
+      end)
+    end
 
-  test "decimal numbers (with a .) should be cast to floats" do
-    assert filter("and(grade.eq.4.5)") == [and: [{:eq, "grade", 4.5}]]
+    test "decimal numbers (with a .) should be cast to floats" do
+      assert filter("and(grade.eq.4.5)") == [and: [{:eq, "grade", 4.5}]]
 
-    assert filter("and(grade.in.(5.5, 6.5, 7.5, 8.5, 9.5))") == [
-             and: [{:in, "grade", [5.5, 6.5, 7.5, 8.5, 9.5]}]
-           ]
+      assert filter("and(grade.in.(5.5, 6.5, 7.5, 8.5, 9.5))") == [
+               and: [{:in, "grade", [5.5, 6.5, 7.5, 8.5, 9.5]}]
+             ]
+    end
+
+    test "it should cast boolean expression for neq and eq" do
+      assert filter("and(is_visible.eq.true,is_published.neq.false)") == [
+               and: [{:eq, "is_visible", true}, {:neq, "is_published", false}]
+             ]
+
+      assert filter("and(updated_at.eq.null,published_at.neq.null)") == [
+               and: [{:eq, "updated_at", nil}, {:neq, "published_at", nil}]
+             ]
+    end
+
+    test "quoted expressions should not be cast" do
+      assert filter("and(is_visible.eq.\"true\")") == [and: [{:eq, "is_visible", "true"}]]
+      assert filter("and(is_visible.neq.\"false\")") == [and: [{:neq, "is_visible", "false"}]]
+
+      assert filter("and(id.in.(\"1,2,3\", \"true\", \"null\"))") == [
+               and: [{:in, "id", ["1,2,3", "true", "null"]}]
+             ]
+    end
   end
 end
