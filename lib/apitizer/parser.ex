@@ -16,12 +16,21 @@ defmodule Apitizer.Parser do
 
   skip_space = ignore(ascii_char([?\s, ?\t, ?\r, ?\n]))
 
+  quoted_value =
+    ignore(string("\""))
+    |> utf8_string([{:not, ?"}], min: 1)
+    |> unwrap_and_tag(:quoted)
+    |> ignore(string("\""))
+
   # accepts a a comma separated list like: (1, 2, 3) or (name, age, wow)
   list =
     ignore(string("("))
     |> repeat(skip_space)
     |> repeat(
-      utf8_string([{:not, ?,}, {:not, ?)}], min: 1)
+      choice([
+        quoted_value,
+        utf8_string([{:not, ?,}, {:not, ?)}], min: 1)
+      ])
       |> repeat(skip_space)
       |> optional(ignore(string(",")))
       |> repeat(skip_space)
@@ -43,7 +52,11 @@ defmodule Apitizer.Parser do
       |> concat(list),
       choice(Enum.map(@operators, fn op -> string(op) end))
       |> ignore(string("."))
-      |> utf8_string([{:not, ?,}, {:not, ?.}, {:not, ?)}], min: 1)
+      |> choice([
+        quoted_value,
+        # dot "." IS allowed here because of decimal values.
+        utf8_string([{:not, ?,}, {:not, ?)}], min: 1)
+      ])
     ])
     |> reduce(:to_boolean_expr)
 
@@ -106,13 +119,22 @@ defmodule Apitizer.Parser do
 
   defp cast_value(_, value), do: value
 
+  defp maybe_number({:quoted, value}), do: value
+
   defp maybe_number(value) do
-    case Float.parse(value) do
+    # Best-effort casting to a number.
+    case Integer.parse(value) do
       {number, ""} ->
         number
 
-      {_, _} ->
-        value
+      {_, "." <> _} ->
+        case Float.parse(value) do
+          {number, ""} ->
+            number
+
+          _ ->
+            value
+        end
 
       :error ->
         value
