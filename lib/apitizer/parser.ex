@@ -6,7 +6,7 @@ defmodule Apitizer.Parser do
   ## Example
 
       iex> parse_filter("and(grade.gte.90,student.eq.true,or(age.gte.14,age.eq.null))")
-      [and: [{:gte, "grade}, 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]]
+      [and: [{:gte, "grade", 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]]
   """
   # See the `test/apitizer/parser_test.exs` for many more examples.
   import NimbleParsec

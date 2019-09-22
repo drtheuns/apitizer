@@ -1,5 +1,6 @@
 defmodule Apitizer.ParserTest do
   use ExUnit.Case, async: true
+  doctest Apitizer.Parser, import: true
 
   defp filter(query) do
     Apitizer.Parser.parse_filter(query)

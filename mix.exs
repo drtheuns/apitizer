@@ -21,8 +21,9 @@ defmodule Apitizer.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto, "~> 3.1"},
-      {:nimble_parsec, "~> 0.5.1"}
+      {:plug, "~> 1.8"},
+      {:ecto, "~> 3.0"},
+      {:nimble_parsec, "~> 0.5"}
     ]
   end
 end
