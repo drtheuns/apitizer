@@ -7,8 +7,8 @@ defmodule Apitizer.RequestParser do
 
   ## Options
 
-      * `:include_key`: the key to the query parameter to use for includes.
-        Defaults to `"include"`. Expects a string.
+    * `:include_key`: the key to the query parameter to use for includes.
+      Defaults to `"include"`. Expects a string.
   """
   use Plug.Builder
   alias Apitizer.IncludeTree

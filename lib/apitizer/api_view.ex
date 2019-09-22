@@ -7,11 +7,11 @@ defmodule Apitizer.ApiView do
 
   Includes allow clients of your API to get nested data. For example, if we have
   a Post model with many Comments, it might make sense to return both in one API
-  call. Includes allow the client to specify an `includes` query parameter which
+  call. Includes allow the client to pass an `includes` query parameter which
   specifies the related resources they want to include. The call to posts might
   look like:
 
-      `GET /posts/1?include=comments`
+      GET /posts/1?include=comments
 
   Which might return something like:
 
@@ -34,10 +34,10 @@ defmodule Apitizer.ApiView do
   In order to support this on the backend, we need to implement a couple of
   things:
 
-      * A mapping between request include to relationship name on the model. We
+    * A mapping between request include to relationship name on the model. We
         need to be able to turn "comments" into something our data model
         understands. This is needed for eager loading the related data.
-      * A mapping between request include to view module. We need to know which
+    * A mapping between request include to view module. We need to know which
         module can render some include.
 
   These two mappings are located in two different places. The preload mapping is
@@ -134,7 +134,7 @@ defmodule Apitizer.ApiView do
   so if we also wanted the author of the post as well as the author of each
   comment, the client can request this as:
 
-      `GET /posts/1?include=author,comments.author`
+      GET /posts/1?include=author,comments.author
 
   To render this response, all you need to do is update the preload and view
   mappings for all the resources in question.
@@ -142,37 +142,39 @@ defmodule Apitizer.ApiView do
   ## View mapping options
 
   The include mapping in the view supports a couple of formats to offer some
-  more control over the final response.
+  more control over the final response. See also `c:include/3`.
 
-      * `{CommentView, options}`
-      * `CommentView`
+    * `{CommentView, options}`
+    * `CommentView`
 
   These are the most common types of includes. They simply defer loading of a
   resource to another view. For the accepted options, see below.
 
-      * `{:merge, CommentView, options}`
-      * `{:merge, CommentView}`
+    * `{:merge, CommentView, options}`
+    * `{:merge, CommentView}`
 
   This will merge the result of the include into the main response. Merge
   includes can be useful when you want to reduce the response size. Clients that
-  need the extra data can simple add the include. For accepted options, see
+  need the extra data can simply add the include. For accepted options, see
   below.
 
-      * `{:merge, %{key: value}}`
-      * `{%{key: value}, options}`
-      * `%{key: value}`
+    * `{:merge, %{key: value}}`
+    * `{%{key: value}, options}`
+    * `%{key: value}`
 
   Just like how you can use another view to render an include, you can also
   simply return a rendered map.
 
   ### Options
 
-      * `:as` the key on which the rendered child include will be placed. If you
-        wanted to render the post's author as "post_author" instead of just
-        author, you could do so with: `{AuthorView, as: :user}`.
-      * `:template` the view template to use when rendering the include. By
-        default this will use the resource name of the view, e.g. `CommentView`
-        will use `"comment.json"`.
+  See also `t:view_opts`.
+
+    * `:as` the key on which the rendered child include will be placed. If you
+      wanted to render the post's author as "post_author" instead of just
+      author, you could do so with: `{AuthorView, as: :user}`.
+    * `:template` the view template to use when rendering the include. By
+      default this will use the resource name of the view, e.g. `CommentView`
+      will use `"comment.json"`.
   """
 
   alias Apitizer.IncludeTree
@@ -195,6 +197,8 @@ defmodule Apitizer.ApiView do
   defmacro __using__(_env) do
     quote do
       import Apitizer.ApiView
+
+      @behaviour Apitizer.ApiView
 
       def render_includes(rendered, resource, assigns),
         do: render_includes(__MODULE__, rendered, resource, assigns)
@@ -267,7 +271,7 @@ defmodule Apitizer.ApiView do
 
       def include("author", %{author_id: user_id}, %{current_user: %{id: user_id}}), do: {UserView, :author}
   """
-  @callback include(String.t(), resource, assigns) ::
+  @callback include(include :: String.t(), resource, assigns) ::
               {module, view_opts}
               | module()
               | {:merge, module(), view_opts}
@@ -278,8 +282,11 @@ defmodule Apitizer.ApiView do
               | nil
 
   @doc """
-  This is the primary entrypoint for rendering the includes and should be called
-  in your render function.
+  This is the manual version of rendering includes.
+
+  Prefer using `render_one_with_includes/4` and `render_many_with_includes/4`.
+  These are drop-in replacements of the Phoenix versions and take care of
+  includes for you.
 
   ## Example
 
@@ -383,7 +390,7 @@ defmodule Apitizer.ApiView do
   ## Example
 
       iex> put_when(%{}, true, :email, "john@doe.com")
-      %{email: "john@doe.com}
+      %{email: "john@doe.com"}
       iex> put_when(%{}, false, :email, "john@doe.com")
       %{}
       iex> put_when(%{}, false, :email, "john@doe.com", "redacted")
@@ -402,8 +409,8 @@ defmodule Apitizer.ApiView do
 
   ## Example
 
-      iex> merge_when(%{}, true, %{email: "john@doe.com})
-      %{email: "john@doe.com}
+      iex> merge_when(%{}, true, %{email: "john@doe.com"})
+      %{email: "john@doe.com"}
   """
   def merge_when(source_map, true, value_map), do: Map.merge(source_map, value_map)
   def merge_when(source_map, false, _value_map), do: source_map
