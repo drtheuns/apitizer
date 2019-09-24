@@ -243,6 +243,11 @@ defmodule Apitizer.ApiView do
 
       defp to_map(assigns) when is_map(assigns), do: assigns
       defp to_map(assigns) when is_list(assigns), do: :maps.from_list(assigns)
+
+      @impl Apitizer.ApiView
+      def include(_, _, _), do: nil
+
+      defoverridable include: 3
     end
   end
 

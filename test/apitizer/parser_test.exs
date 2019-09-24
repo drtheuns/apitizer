@@ -54,13 +54,18 @@ defmodule Apitizer.ParserTest do
   end
 
   test "it should accept quoted expressions" do
-    assert filter("and(field.in.(\"hello, world\", \"5\"))") == [
+    assert filter(~S{and(field.in.("hello, world", "5"))}) == [
              and: [{:in, "field", ["hello, world", "5"]}]
            ]
 
-    assert filter("and(name.eq.\"Doe, John\", id.eq.\"5\")") == [
+    assert filter(~S{and(name.eq."Doe, John", id.eq."5")}) == [
              and: [{:eq, "name", "Doe, John"}, {:eq, "id", "5"}]
            ]
+  end
+
+  test "it should allow for escaping of quotes within quoted expressions" do
+    assert filter(~S{and(name.eq."John \" Doe")}) == [and: [{:eq, "name", "John \" Doe"}]]
+    assert filter(~S{and(name.in.("Wow\"", "Doe"))}) == [and: [{:in, "name", ["Wow\"", "Doe"]}]]
   end
 
   describe "casting" do
@@ -91,10 +96,10 @@ defmodule Apitizer.ParserTest do
     end
 
     test "quoted expressions should not be cast" do
-      assert filter("and(is_visible.eq.\"true\")") == [and: [{:eq, "is_visible", "true"}]]
-      assert filter("and(is_visible.neq.\"false\")") == [and: [{:neq, "is_visible", "false"}]]
+      assert filter(~S{and(is_visible.eq."true")}) == [and: [{:eq, "is_visible", "true"}]]
+      assert filter(~S{and(is_visible.neq."false")}) == [and: [{:neq, "is_visible", "false"}]]
 
-      assert filter("and(id.in.(\"1,2,3\", \"true\", \"null\"))") == [
+      assert filter(~S{and(id.in.("1,2,3", "true", "null"))}) == [
                and: [{:in, "id", ["1,2,3", "true", "null"]}]
              ]
     end

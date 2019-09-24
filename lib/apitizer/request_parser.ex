@@ -8,12 +8,15 @@ defmodule Apitizer.RequestParser do
   ## Options
 
     * `:include_key`: the key to the query parameter to use for includes.
-      Defaults to `"include"`. Expects a string.
+      Defaults to `"include"`.
+    * `:filter_key` the query parameter key to use for filters.
+      Defaults to `"filter"`.
   """
   use Plug.Builder
-  alias Apitizer.IncludeTree
+  alias Apitizer.{IncludeTree, Parser}
 
   plug(:parse_includes, builder_opts())
+  plug(:parse_filters, builder_opts())
 
   @doc """
   Parses the request's includes into a tree which will later be used by the
@@ -42,6 +45,23 @@ defmodule Apitizer.RequestParser do
       includes when is_list(includes) -> includes
       includes when is_binary(includes) -> String.split(includes, ",", trim: true)
       _ -> []
+    end
+  end
+
+  @doc """
+  Parses the request's filter to something the query builder understands.
+
+  See `Apitizer.Parser` for more information on filters.
+  """
+  def parse_filters(conn, opts \\ []) do
+    filters = Map.get(conn.query_params, Keyword.get(opts, :filter_key, "filter"))
+
+    case Parser.parse_filter(filters) do
+      :error ->
+        conn
+
+      parsed ->
+        put_private(conn, :apitizer_filters, parsed)
     end
   end
 end

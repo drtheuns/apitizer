@@ -7,6 +7,8 @@ defmodule Apitizer.Parser do
 
       iex> parse_filter("and(grade.gte.90,student.eq.true,or(age.gte.14,age.eq.null))")
       [and: [{:gte, "grade", 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]]
+
+  See the `test/apitizer/parser_test.exs` for many more examples.
   """
   # See the `test/apitizer/parser_test.exs` for many more examples.
   import NimbleParsec
@@ -19,7 +21,16 @@ defmodule Apitizer.Parser do
 
   quoted_value =
     ignore(string("\""))
-    |> utf8_string([{:not, ?"}], min: 1)
+    # Use repeat rather than utf8_string(_, min: 1) to implement support for
+    # escaping double quotes.
+    |> repeat(
+      choice([
+        # Escaped double quotes here.
+        string(~S(\")) |> replace(?"),
+        utf8_char([{:not, ?"}])
+      ])
+    )
+    |> reduce({List, :to_string, []})
     |> unwrap_and_tag(:quoted)
     |> ignore(string("\""))
 
@@ -97,6 +108,9 @@ defmodule Apitizer.Parser do
 
   See `test/apitizer/parser_test.exs` for more examples.
   """
+  def parse_filter(nil), do: []
+  def parse_filter(""), do: []
+
   def parse_filter(query_string) do
     case filter(query_string) do
       {:ok, fields, _, _, _, _} ->
