@@ -4,6 +4,9 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 
 # TODO
 
+- [ ] Add more operators to the filter parser, keep some in reserve (such as
+      "search" and other common, custom logic).
+      ["search", "contains", "like", "ilike"]
 - [X] Add ability for custom preload
 - [ ] Add ability for custom filter (operator)
 - [ ] Add ability for custom sorting
@@ -29,3 +32,4 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [ ] Allow Repo to be configured once (bit of a pain to do it for every module.)
       Three levels of repo definition, in order of priority: argument > module > config
 - [ ] Allow select_key and filter_key to be defined in the config.
+- [ ] Preload filters?

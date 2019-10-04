@@ -198,8 +198,8 @@ defmodule Apitizer.Parser do
     end
   end
 
-  def parse_select(nil), do: []
-  def parse_select(""), do: []
+  def parse_select(nil), do: [:all]
+  def parse_select(""), do: [:all]
 
   def parse_select(query_string) do
     case select(query_string) do

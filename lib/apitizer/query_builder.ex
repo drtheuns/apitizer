@@ -197,12 +197,11 @@ defmodule Apitizer.QueryBuilder do
   end
 
   defp apply_filters(query, {and_or, expressions}, tree) do
-    dynamics = apply_filters(and_or != :and, and_or, expressions, tree)
+    dynamics = apply_filters(and_or == :and, and_or, expressions, tree)
     from(q in query, where: ^dynamics)
   end
 
   defp apply_filters(query, _, _), do: query
-
   defp apply_filters(dynamics, _, [], _), do: dynamics
 
   defp apply_filters(dynamics, and_or, [{op, field, value} | tail], tree) do
@@ -219,8 +218,8 @@ defmodule Apitizer.QueryBuilder do
     end
   end
 
-  defp apply_filters(dynamics, parent_and_or, [{and_or, expr} | tail], tree) do
-    dynamics
+  defp apply_filters(_dynamics, parent_and_or, [{and_or, expr} | tail], tree) do
+    (and_or == :and)
     |> apply_filters(and_or, expr, tree)
     |> apply_filters(parent_and_or, tail, tree)
   end
