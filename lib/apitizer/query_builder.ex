@@ -236,9 +236,9 @@ defmodule Apitizer.QueryBuilder do
 
   defp apply_preload(query, tree) do
     preload =
-      Enum.map(tree.children, fn {name, subtree} ->
+      Enum.map(tree.children, fn {_name, subtree} ->
         new_query = from(q in subtree.builder.__schema__) |> apply_select(subtree)
-        {name, apply_preload(new_query, subtree)}
+        {subtree.key, apply_preload(new_query, subtree)}
       end)
 
     case preload do
