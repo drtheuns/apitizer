@@ -188,8 +188,10 @@ defmodule Apitizer.Parser do
 
   def parse_filter(query_string) do
     case filter(query_string) do
-      {:ok, fields, _, _, _, _} ->
-        fields
+      {:ok, [and_or], _, _, _, _} ->
+        # We should always end with only top-level expression in our list. This
+        # will be and and|or expression.
+        and_or
 
       _ ->
         []

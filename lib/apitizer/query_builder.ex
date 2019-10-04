@@ -77,9 +77,6 @@ defmodule Apitizer.QueryBuilder do
       conn.query_params
       |> Map.get(Keyword.get(opts, :filter_key, "filter"))
       |> Parser.parse_filter()
-      |> hd()
-
-    # hd() here, because there's always only one top-level query: {and|or, expressions}
 
     unless is_atom(repo) and repo != nil do
       raise ArgumentError,
