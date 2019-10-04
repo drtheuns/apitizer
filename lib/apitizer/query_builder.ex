@@ -7,11 +7,11 @@ defmodule Apitizer.QueryBuilder do
   alias Apitizer.Parser
 
   defmodule Attribute do
-    defstruct [:name, :sortable, :operators, :key, :alias]
+    defstruct [:name, :sortable, :operators, :key, :alias, :apidoc]
   end
 
   defmodule Association do
-    defstruct [:name, :builder, :key]
+    defstruct [:name, :builder, :key, :apidoc]
   end
 
   @doc """
@@ -113,10 +113,10 @@ defmodule Apitizer.QueryBuilder do
       |> Map.get(Keyword.get(opts, :select_key, "select"))
       |> Parser.parse_select()
 
-    build_render_tree(builder, nil, nil, fields)
+    build_render_tree(builder, fields, nil, nil, nil)
   end
 
-  defp build_render_tree(builder, name, key, fields) do
+  defp build_render_tree(builder, fields, name, key, apidoc) do
     {assoc, fields} =
       Enum.split_with(fields, fn
         {:assoc, _, _} -> true
@@ -144,12 +144,21 @@ defmodule Apitizer.QueryBuilder do
             acc
 
           assoc ->
-            subtree = build_render_tree(assoc.builder, assoc_alias, assoc.key, assoc_fields)
+            subtree =
+              build_render_tree(assoc.builder, assoc_fields, assoc_alias, assoc.key, assoc.apidoc)
+
             Map.put(acc, assoc.name, subtree)
         end
       end)
 
-    RenderTree.new(name, key, builder, fields, children)
+    %RenderTree{
+      name: name,
+      key: key,
+      builder: builder,
+      fields: fields,
+      children: children,
+      apidoc: apidoc
+    }
   end
 
   defp get_field(module, {:alias, field, field_alias}, acc) do
@@ -248,34 +257,6 @@ defmodule Apitizer.QueryBuilder do
   end
 
   @doc false
-  def __attribute__(module, name, opts) do
-    opts =
-      opts
-      |> Keyword.put_new(:operators, Module.get_attribute(module, :operators))
-      |> Keyword.put_new(:sortable, false)
-      |> Keyword.put_new(:key, name)
-      |> Keyword.put(:name, name)
-      |> Keyword.put(:alias, name)
-
-    struct = struct(Attribute, opts) |> Macro.escape()
-
-    Module.put_attribute(module, :apitizer_attributes, {name, struct})
-  end
-
-  @doc false
-  def __association__(module, name, builder, opts) do
-    opts =
-      opts
-      |> Keyword.put(:name, name)
-      |> Keyword.put(:builder, builder)
-      |> Keyword.put_new(:key, name)
-
-    struct = struct(Association, opts) |> Macro.escape()
-
-    Module.put_attribute(module, :apitizer_associations, {name, struct})
-  end
-
-  @doc false
   defmacro __using__(opts) do
     schema = Keyword.get(opts, :schema) |> expand_alias(__CALLER__)
     repo = Keyword.get(opts, :repo) |> expand_alias(__CALLER__)
@@ -302,6 +283,7 @@ defmodule Apitizer.QueryBuilder do
       Module.register_attribute(__MODULE__, :apitizer_associations, accumulate: true)
       Module.register_attribute(__MODULE__, :apitizer_filters, accumulate: true)
       Module.register_attribute(__MODULE__, :apitizer_sorts, accumulate: true)
+      Module.register_attribute(__MODULE__, :apidoc, accumulate: false)
 
       def __schema__, do: unquote(schema)
       def __repo__, do: unquote(repo)
@@ -332,6 +314,42 @@ defmodule Apitizer.QueryBuilder do
       # unquote(compile(:filter, filters))
       # unquote(compile(:sort, sorts))
     end
+  end
+
+  @doc false
+  def __attribute__(module, name, opts) do
+    opts =
+      opts
+      |> Keyword.put_new(:operators, Module.get_attribute(module, :operators))
+      |> Keyword.put_new(:sortable, false)
+      |> Keyword.put_new(:key, name)
+      |> Keyword.put(:name, name)
+      |> Keyword.put(:alias, name)
+      |> Keyword.put(:apidoc, apidoc(module))
+
+    struct = struct(Attribute, opts) |> Macro.escape()
+
+    Module.put_attribute(module, :apitizer_attributes, {name, struct})
+  end
+
+  @doc false
+  def __association__(module, name, builder, opts) do
+    opts =
+      opts
+      |> Keyword.put(:name, name)
+      |> Keyword.put(:builder, builder)
+      |> Keyword.put_new(:key, name)
+      |> Keyword.put(:apidoc, apidoc(module))
+
+    struct = struct(Association, opts) |> Macro.escape()
+
+    Module.put_attribute(module, :apitizer_associations, {name, struct})
+  end
+
+  defp apidoc(module) do
+    result = Module.get_attribute(module, :apidoc)
+    Module.delete_attribute(module, :apidoc)
+    result
   end
 
   # Compiles all the different attributes, associations, filters, etc. to
