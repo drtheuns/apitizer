@@ -99,7 +99,7 @@ defmodule Apitizer.QueryBuilder do
     |> builder.before_filters(context)
     |> apply_filters(filters, tree)
     |> apply_select(tree)
-    |> apply_preload(tree)
+    |> apply_preload(tree, context)
     |> repo.all()
     |> apply_transform(tree)
   end
@@ -240,11 +240,15 @@ defmodule Apitizer.QueryBuilder do
     end)
   end
 
-  defp apply_preload(query, tree) do
+  defp apply_preload(query, tree, context) do
     preload =
       Enum.map(tree.children, fn {_name, subtree} ->
-        new_query = from(q in subtree.builder.__schema__) |> apply_select(subtree)
-        {subtree.key, apply_preload(new_query, subtree)}
+        new_query =
+          from(q in subtree.builder.__schema__)
+          |> apply_select(subtree)
+          |> tree.builder.preload(subtree.key, Map.put(context, :render_tree, tree))
+
+        {subtree.key, apply_preload(new_query, subtree, context)}
       end)
 
     case preload do
@@ -287,12 +291,10 @@ defmodule Apitizer.QueryBuilder do
 
       # def build(conn, opts \\ []), do: build(__MODULE__, conn, opts)
       def all(conn, opts \\ []), do: all(__MODULE__, conn, opts)
+      def before_filters(query, _context), do: query
+      def preload(query, _path, _context), do: query
 
-      def before_filters(query, context) do
-        query
-      end
-
-      defoverridable before_filters: 2
+      defoverridable before_filters: 2, preload: 3
 
       @before_compile Apitizer.QueryBuilder
     end
