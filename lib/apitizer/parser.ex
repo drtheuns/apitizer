@@ -17,7 +17,16 @@ defmodule Apitizer.Parser do
   # the "in" operator is special as it requires a different value.
   @operators ["eq", "gte", "gt", "lte", "lt", "neq"]
 
+  @type field :: field_alias | field_assoc | String.t()
+  @type field_alias :: {:alias, String.t(), String.t()}
+  @type field_assoc :: {:assoc, String.t() | field_alias, [field]}
+
   skip_space = ignore(ascii_char([?\s, ?\t, ?\r, ?\n]))
+
+  maybe_comma =
+    repeat(skip_space)
+    |> optional(ignore(string(",")))
+    |> repeat(skip_space)
 
   quoted_value =
     ignore(string("\""))
@@ -43,9 +52,7 @@ defmodule Apitizer.Parser do
         quoted_value,
         utf8_string([{:not, ?,}, {:not, ?)}], min: 1)
       ])
-      |> repeat(skip_space)
-      |> optional(ignore(string(",")))
-      |> repeat(skip_space)
+      |> concat(maybe_comma)
     )
     |> map(:maybe_number)
     |> wrap()
@@ -87,8 +94,7 @@ defmodule Apitizer.Parser do
           parsec(:and_or_expression),
           boolean_expr
         ])
-        |> optional(ignore(string(",")))
-        |> repeat(skip_space)
+        |> concat(maybe_comma)
       )
     )
     |> ignore(string(")"))
@@ -96,7 +102,76 @@ defmodule Apitizer.Parser do
     |> post_traverse(:remove_empty_expressions)
   )
 
-  defparsecp(:filter, parsec(:and_or_expression))
+  defparsecp(
+    :filter,
+    choice([
+      parsec(:and_or_expression),
+      repeat(
+        choice([
+          parsec(:and_or_expression),
+          boolean_expr
+        ])
+        |> concat(maybe_comma)
+      )
+      |> tag(:and)
+    ])
+  )
+
+  field_identifier = utf8_string([{:not, ?,}, {:not, ?\s}, {:not, ?(}, {:not, ?)}], min: 1)
+
+  field_alias =
+    utf8_string([{:not, ?,}, {:not, ?:}, {:not, ?\s}, {:not, ?(}, {:not, ?)}], min: 1)
+    |> ignore(string(":"))
+    |> unwrap_and_tag(:alias)
+
+  defcombinatorp(
+    :field,
+    choice([
+      string("*") |> replace(:all),
+      repeat(skip_space)
+      |> optional(field_alias)
+      |> concat(field_identifier)
+      |> repeat(skip_space)
+      |> wrap()
+      |> optional(
+        ignore(string("("))
+        |> repeat(parsec(:field) |> concat(maybe_comma))
+        |> ignore(string(")"))
+        |> tag(:assoc)
+      )
+      |> post_traverse(:unwrap_alias)
+    ])
+  )
+
+  defparsecp(
+    :select,
+    repeat(
+      parsec(:field)
+      |> concat(maybe_comma)
+    )
+  )
+
+  defp unwrap_alias(_rest, [{:assoc, fields}, [assoc]], context, _line, _offset) do
+    {[{:assoc, assoc, fields}], context}
+  end
+
+  defp unwrap_alias(
+         _rest,
+         [{:assoc, fields}, [{:alias, assoc_alias}, assoc]],
+         context,
+         _line,
+         _offset
+       ) do
+    {[{:assoc, {:alias, assoc, assoc_alias}, fields}], context}
+  end
+
+  defp unwrap_alias(_rest, [[no_alias]], context, _line, _offset) do
+    {[no_alias], context}
+  end
+
+  defp unwrap_alias(_rest, [[{:alias, field_alias}, field]], context, _line, _offset) do
+    {[{:alias, field, field_alias}], context}
+  end
 
   @doc """
   Parse a filter query to a list of expressions.
@@ -117,7 +192,20 @@ defmodule Apitizer.Parser do
         fields
 
       _ ->
-        :error
+        []
+    end
+  end
+
+  def parse_select(nil), do: []
+  def parse_select(""), do: []
+
+  def parse_select(query_string) do
+    case select(query_string) do
+      {:ok, fields, _, _, _, _} ->
+        fields
+
+      _ ->
+        []
     end
   end
 
