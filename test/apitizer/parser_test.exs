@@ -2,12 +2,16 @@ defmodule Apitizer.ParserTest do
   use ExUnit.Case, async: true
   doctest Apitizer.Parser, import: true
 
-  defp filter(query) do
+  def filter(query) do
     Apitizer.Parser.parse_filter(query)
   end
 
   def select(query) do
     Apitizer.Parser.parse_select(query)
+  end
+
+  def sort(query) do
+    Apitizer.Parser.parse_sort(query)
   end
 
   describe "filter" do
@@ -168,6 +172,27 @@ defmodule Apitizer.ParserTest do
                    ]}
                 ]}
              ]
+    end
+  end
+
+  describe "sort" do
+    test "should accept just a field and default to :asc" do
+      assert sort("field") == [{:asc, "field"}]
+    end
+
+    test "should allow multiple fields" do
+      assert sort("field1,field2,field3") == [
+               {:asc, "field1"},
+               {:asc, "field2"},
+               {:asc, "field3"}
+             ]
+    end
+
+    test "should allow asc|desc to be prepended" do
+      assert sort("field.asc") == [{:asc, "field"}]
+      assert sort("field.desc") == [{:desc, "field"}]
+      assert sort("field.desc,field2.asc") == [{:desc, "field"}, {:asc, "field2"}]
+      assert sort("field.desc,field2.desc") == [{:desc, "field"}, {:desc, "field2"}]
     end
   end
 end

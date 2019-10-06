@@ -1,25 +1,142 @@
 defmodule Apitizer.Parser do
   @moduledoc """
-  Implements the parsers for the custom query expressions used in the API
-  requests.
+  Implements the parsers for all the expressions that are allowed on the
+  request: filter, select and sort.
+
+  ## Filters
+
+  Apitizer is able to parse relatively complex filter expressions and convert it
+  to an Ecto query. The expression syntax is based on that of
+  [PostgREST](http://postgrest.org/en/v6.0/api.html#horizontal-filtering-rows).
+
+  Following are some examples of filter expressions:
+
+    * `id.eq.5`
+    * `and(name.ilike."test", or(id.in.(10,11,12), role.eq.admin))`
+    * `*.search.hello world`
+
+  Features:
+
+    * The first-most expression does not need to be wrapped in `and()`, this
+      will happen automatically. So `id.eq.5` and `and(id.eq.5)` are the same.
+    * Spaces are optional in most locations.
+    * Values can be quoted with `"`. If the value must contain a `"` itself, it
+      can be quoted like: `\\"`
+    * It accepts `:*` as a catch-all field. This can be useful when applying a
+      filter to the entire resource, rather than some specific field, for
+      example, a search over multiple fields. These types of filters must be
+      explicitly implemented in the query builder.
+
+  Limitations:
+
+    * It does not accept custom operators. See `t:filter_operator/0` for a list
+      of supported operators.
+
+  ## Selects
+
+  The select parser is used by the query builder to determine which fields to
+  show and select in a query. Some examples:
+
+    * `*`: select everything. This is the default.
+    * `id,name,posts(*,comments(id,body))`: select the `id`, `name`, every field on the
+      related `posts` and the `id` and `body` from those posts' comments.
+    * `identifier:id,name,BlogPosts:posts(*)` select the `id`, `name` and `related`
+      posts and alias the `id` to `identifier`, and alias the `posts` to `BlogPosts`.
+
+  Features:
+
+    * Accepts `*` to mean all fields.
+    * Accepts relationships and fields on those relationships through parenthesis.
+    * Accepts aliases for fields, which the query builder will use as key when
+      returning a response.
+    * Spaces are optional.
+  """
+  import NimbleParsec
+
+  @type filter_and_or :: {:and | :or, [filter_expression | filter_operator]}
+  @type filter_expression :: {filter_operator, filter_field, filter_value}
+  @type filter_operator :: :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like
+  @type filter_field :: :* | String.t()
+  @type filter_value :: String.t() | integer() | float()
+
+  @type select_field :: String.t() | select_assoc | select_alias
+  @type select_assoc :: {:assoc, String.t() | select_alias, [select_field]}
+  @type select_alias :: {:alias, String.t(), String.t()}
+
+  @type sort :: {:asc | :desc, field :: String.t()}
+
+  @doc """
+  Parses a filter expressions as would be passed on the request.
 
   ## Example
 
-      iex> parse_filter("and(grade.gte.90,student.eq.true,or(age.gte.14,age.eq.null))")
-      {:and, [{:gte, "grade", 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]}
-
-  See the `test/apitizer/parser_test.exs` for many more examples.
+      iex> parse_filter("priority.eq.4,or(id.in.(1,2,3),id.eq.5)")
+      {:and, [{:eq, "priority", 4}, {:or, [{:in, "id", [1,2,3]}, {:eq, "id", 5}]}]}
   """
-  # See the `test/apitizer/parser_test.exs` for many more examples.
-  import NimbleParsec
+  @spec parse_filter(String.t()) :: filter_and_or
+  def parse_filter(query_string) do
+    case parse(&filter/1, query_string, [[]]) do
+      [] -> []
+      [and_or_expression] -> and_or_expression
+    end
+  end
+
+  @doc """
+  Parses a select expressions as would be passed on the request.
+
+  ## Example
+
+      iex> parse_select("id,name,posts(*,reactions:comments(*))")
+      ["id", "name", {:assoc, "posts", [:all, {:assoc, {:alias, "comments", "reactions"}, [:all]}]}]
+  """
+  @spec parse_select(String.t()) :: [select_field]
+  def parse_select(query_string), do: parse(&select/1, query_string, [])
+
+  @doc """
+  Parses a sort expressions as would be passed on the request.
+
+  ## Example
+
+      iex> parse_sort("name.asc,id.desc")
+      [{:asc, "name"}, {:desc, "id"}]
+      iex> parse_sort("name")
+      [{:asc, "name"}]
+  """
+  @spec parse_sort(String.t()) :: [sort]
+  def parse_sort(query_string), do: parse(&sort/1, query_string, [])
+
+  defp parse(_parser, "", default), do: default
+  defp parse(_parser, nil, default), do: default
+
+  defp parse(parser, query_string, default) when is_binary(query_string) do
+    parse_or_default(parser.(query_string), default)
+  end
+
+  defp parse(_parser, _query_string, default), do: default
+
+  defp parse_or_default({:ok, fields, _, _, _, _}, _), do: fields
+  defp parse_or_default({:ok, value}, _), do: value
+  defp parse_or_default(_, default), do: default
+
+  defp sort(query_string) do
+    sorts =
+      query_string
+      |> String.split(",", trim: true)
+      |> Enum.map(fn value ->
+        case String.split(value, ".", parts: 2, trim: true) do
+          [field] -> {:asc, field}
+          [field, "asc"] -> {:asc, field}
+          [field, "desc"] -> {:desc, field}
+          [field, _] -> {:asc, field}
+        end
+      end)
+
+    {:ok, sorts}
+  end
 
   # Order of these is importants, as "gt" would match before "gte".
   # the "in" operator is special as it requires a different value.
   @operators ["eq", "gte", "gt", "lte", "lt", "neq", "search", "ilike", "like"]
-
-  @type field :: field_alias | field_assoc | String.t()
-  @type field_alias :: {:alias, String.t(), String.t()}
-  @type field_assoc :: {:assoc, String.t() | field_alias, [field]}
 
   skip_space = ignore(ascii_char([?\s, ?\t, ?\r, ?\n]))
 
@@ -61,7 +178,7 @@ defmodule Apitizer.Parser do
   # Examples:
   # student.eq.true -> {:eq, "student", true}
   # grade.gte.90    -> {:gte, "grade", 90}
-  # id.in.(1,2,3)   -> {:in, "id", [1.0, 2.0, 3.0]}
+  # id.in.(1,2,3)   -> {:in, "id", [1, 2, 3]}
   boolean_expr =
     choice([
       string("*") |> replace(:*),
@@ -174,44 +291,6 @@ defmodule Apitizer.Parser do
 
   defp unwrap_alias(_rest, [[{:alias, field_alias}, field]], context, _line, _offset) do
     {[{:alias, field, field_alias}], context}
-  end
-
-  @doc """
-  Parse a filter query to a list of expressions.
-
-  Example:
-
-  iex> parse_filter("and(student.eq.true,grade.gte.90)")
-  {:and, [{:eq, "student", true}, {:gte, "grade", 90}]}
-
-  See `test/apitizer/parser_test.exs` for more examples.
-  """
-  def parse_filter(nil), do: []
-  def parse_filter(""), do: []
-
-  def parse_filter(query_string) do
-    case filter(query_string) do
-      {:ok, [and_or], _, _, _, _} ->
-        # We should always end with only top-level expression in our list. This
-        # will be and and|or expression.
-        and_or
-
-      _ ->
-        []
-    end
-  end
-
-  def parse_select(nil), do: [:all]
-  def parse_select(""), do: [:all]
-
-  def parse_select(query_string) do
-    case select(query_string) do
-      {:ok, fields, _, _, _, _} ->
-        fields
-
-      _ ->
-        []
-    end
   end
 
   defp to_boolean_expr([field, operator, value]) do
