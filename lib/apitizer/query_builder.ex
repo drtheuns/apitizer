@@ -248,24 +248,21 @@ defmodule Apitizer.QueryBuilder do
     # This needs to happen depth first, otherwise the outer expression ends up
     # being the inner most part of the query. If everything were AND that'd be
     # fine, but it breaks OR
-    attr = tree.builder.__attribute__(field)
     {query, dynamics} = apply_filters({query, dynamics}, and_or, tail, tree, context)
-    allowed? = field == :* || (attr && Enum.member?(attr.operators, op))
 
-    if allowed? do
-      key =
-        case field do
-          :* -> :*
-          _ -> attr.key
+    case tree.builder.filter(field, op, value, query, dynamics, and_or, context) do
+      nil ->
+        if attr = tree.builder.__attribute__(field) do
+          {query, interpret_expr(dynamics, and_or, {op, attr.key, value})}
+        else
+          {query, dynamics}
         end
 
-      case tree.builder.filter(field, op, value, query, dynamics, and_or, context) do
-        nil -> {query, interpret_expr(dynamics, and_or, {op, key, value})}
-        {_query, _dynamics} = updated_values -> updated_values
-        _ -> {query, dynamics}
-      end
-    else
-      {query, dynamics}
+      {_query, _dynamics} = updated_values ->
+        updated_values
+
+      _ ->
+        {query, dynamics}
     end
   end
 
