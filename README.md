@@ -4,13 +4,12 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 
 # TODO
 
-- [ ] Add more operators to the filter parser, keep some in reserve (such as
+- [X] Add more operators to the filter parser, keep some in reserve (such as
       "search" and other common, custom logic).
       ["search", "contains", "like", "ilike"]
 - [X] Add ability for custom preload
-- [ ] Add ability for custom filter (operator)
-- [ ] Add ability for custom sorting
-- [ ] It should be possible to overwrite an operator.
+- [X] Add ability for custom sorting
+- [X] It should be possible to overwrite an operator.
 - [ ] Generate documentation from a query builder.
   - Expose through an endpoint in both HTML/JSON format?
   - Generate all at compile-time to basically just serve static html?
@@ -31,5 +30,5 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [ ] Add maxdepth for includes.
 - [ ] Allow Repo to be configured once (bit of a pain to do it for every module.)
       Three levels of repo definition, in order of priority: argument > module > config
-- [ ] Allow select_key and filter_key to be defined in the config.
-- [ ] Preload filters?
+- [X] Allow select_key, sort_key and filter_key to be defined in the config.
+- [ ] Filters on preload

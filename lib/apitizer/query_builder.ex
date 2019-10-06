@@ -3,6 +3,8 @@ defmodule Apitizer.QueryBuilder do
   TODO
   """
   import Ecto.Query
+  import Apitizer.Utils
+
   alias Apitizer.RenderTree
   alias Apitizer.Parser
 
@@ -98,7 +100,7 @@ defmodule Apitizer.QueryBuilder do
 
   def all(builder, %Plug.Conn{} = conn, opts \\ []) do
     tree = build_render_tree(builder, conn, opts)
-    repo = Keyword.get(opts, :repo, builder.__repo__)
+    repo = option_or_config(opts, :repo, builder.__repo__)
     query = from(q in builder.__schema__)
 
     context =
@@ -107,12 +109,12 @@ defmodule Apitizer.QueryBuilder do
 
     filters =
       conn.query_params
-      |> Map.get(Keyword.get(opts, :filter_key, "filter"))
+      |> Map.get(option_or_config(opts, :filter_key, "filter"))
       |> Parser.parse_filter()
 
     sorts =
       conn.query_params
-      |> Map.get(Keyword.get(opts, :sort_key, "sort"))
+      |> Map.get(option_or_config(opts, :sort_key, "sort"))
       |> Parser.parse_sort()
 
     unless is_atom(repo) and repo != nil do
@@ -145,7 +147,7 @@ defmodule Apitizer.QueryBuilder do
   defp build_render_tree(builder, %Plug.Conn{} = conn, opts) do
     fields =
       conn.query_params
-      |> Map.get(Keyword.get(opts, :select_key, "select"))
+      |> Map.get(option_or_config(opts, :select_key, "select"))
       |> Parser.parse_select()
 
     build_render_tree(builder, fields, nil, nil, nil)

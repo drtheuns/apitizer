@@ -55,7 +55,8 @@ defmodule Apitizer.Parser do
 
   @type filter_and_or :: {:and | :or, [filter_expression | filter_operator]}
   @type filter_expression :: {filter_operator, filter_field, filter_value}
-  @type filter_operator :: :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like
+  @type filter_operator ::
+          :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like | :contains
   @type filter_field :: :* | String.t()
   @type filter_value :: String.t() | integer() | float()
 
@@ -137,7 +138,7 @@ defmodule Apitizer.Parser do
 
   # Order of these is importants, as "gt" would match before "gte".
   # the "in" operator is special as it requires a different value.
-  @operators ["eq", "gte", "gt", "lte", "lt", "neq", "search", "ilike", "like"]
+  @operators ["eq", "gte", "gt", "lte", "lt", "neq", "search", "ilike", "like", "contains"]
 
   skip_space = ignore(ascii_char([?\s, ?\t, ?\r, ?\n]))
 
