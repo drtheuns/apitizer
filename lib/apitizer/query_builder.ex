@@ -7,11 +7,15 @@ defmodule Apitizer.QueryBuilder do
   alias Apitizer.Parser
 
   defmodule Attribute do
-    defstruct [:name, :sortable, :operators, :key, :alias, :apidoc]
+    defstruct [:name, :operators, :key, :alias, :apidoc, virtual: false, sortable: false]
   end
 
   defmodule Association do
     defstruct [:name, :builder, :key, :apidoc]
+  end
+
+  defmodule Filter do
+    defstruct [:field, :operator, :apidoc]
   end
 
   @doc """
@@ -58,11 +62,23 @@ defmodule Apitizer.QueryBuilder do
     end
   end
 
-  # defmacro filter(name, operator, value, query, assigns, do: block) do
-  #   quote do
-  #     Apitizer.QueryBuilder.__filter__(__MODULE__, unquote(name), unquote(operator))
-  #   end
-  # end
+  defmacro filter(field, operator, value, query, dynamics, and_or, context, do: do_block)
+           when (is_atom(field) or is_binary(field)) and is_atom(operator) do
+    body =
+      quote do
+        def filter(unquote_splicing([field, operator, value, query, dynamics, and_or, context])),
+          do: unquote(do_block)
+      end
+
+    quote do
+      Apitizer.QueryBuilder.__filter__(
+        __MODULE__,
+        unquote(field),
+        unquote(operator),
+        unquote(body)
+      )
+    end
+  end
 
   def all(builder, %Plug.Conn{} = conn, opts \\ []) do
     tree = build_render_tree(builder, conn, opts)
@@ -97,7 +113,7 @@ defmodule Apitizer.QueryBuilder do
 
     query
     |> builder.before_filters(context)
-    |> apply_filters(filters, tree)
+    |> apply_filters(filters, tree, context)
     |> apply_select(tree)
     |> apply_preload(tree, context)
     |> repo.all()
@@ -196,32 +212,43 @@ defmodule Apitizer.QueryBuilder do
     from(q in query, select: struct(q, ^fields))
   end
 
-  defp apply_filters(query, {and_or, expressions}, tree) do
-    dynamics = apply_filters(and_or == :and, and_or, expressions, tree)
+  defp apply_filters(query, {and_or, expressions}, tree, context) do
+    {query, dynamics} = apply_filters({query, and_or == :and}, and_or, expressions, tree, context)
     from(q in query, where: ^dynamics)
   end
 
-  defp apply_filters(query, _, _), do: query
-  defp apply_filters(dynamics, _, [], _), do: dynamics
+  defp apply_filters(query_and_dynamics, _, _, _), do: query_and_dynamics
+  defp apply_filters(query_and_dynamics, _, [], _, _), do: query_and_dynamics
 
-  defp apply_filters(dynamics, and_or, [{op, field, value} | tail], tree) do
+  defp apply_filters({query, dynamics}, and_or, [{op, field, value} | tail], tree, context) do
     # This needs to happen depth first, otherwise the outer expression ends up
     # being the inner most part of the query. If everything were AND that'd be
     # fine, but it breaks OR
     attr = tree.builder.__attribute__(field)
-    dynamics = apply_filters(dynamics, and_or, tail, tree)
+    {query, dynamics} = apply_filters({query, dynamics}, and_or, tail, tree, context)
+    allowed? = field == :* || (attr && Enum.member?(attr.operators, op))
 
-    if Enum.member?(attr.operators, op) do
-      interpret_expr(dynamics, and_or, {op, attr.key, value})
+    if allowed? do
+      key =
+        case field do
+          :* -> :*
+          _ -> attr.key
+        end
+
+      case tree.builder.filter(field, op, value, query, dynamics, and_or, context) do
+        nil -> {query, interpret_expr(dynamics, and_or, {op, key, value})}
+        {_query, _dynamics} = updated_values -> updated_values
+        _ -> {query, dynamics}
+      end
     else
-      dynamics
+      {query, dynamics}
     end
   end
 
-  defp apply_filters(_dynamics, parent_and_or, [{and_or, expr} | tail], tree) do
-    (and_or == :and)
-    |> apply_filters(and_or, expr, tree)
-    |> apply_filters(parent_and_or, tail, tree)
+  defp apply_filters({query, _}, parent_and_or, [{and_or, expr} | tail], tree, context) do
+    {query, and_or == :and}
+    |> apply_filters(and_or, expr, tree, context)
+    |> apply_filters(parent_and_or, tail, tree, context)
   end
 
   defp apply_transform(resources, tree) when is_list(resources) do
@@ -277,7 +304,8 @@ defmodule Apitizer.QueryBuilder do
     quote do
       import Apitizer.QueryBuilder
 
-      @operators [:eq, :neq, :gte, :gt, :lte, :lt, :in]
+      @operators [:eq, :neq, :gte, :gt, :lte, :lt, :in, :ilike, :like, :search]
+      @default_operators [:eq, :neq]
 
       Module.register_attribute(__MODULE__, :apitizer_attributes, accumulate: true)
       Module.register_attribute(__MODULE__, :apitizer_associations, accumulate: true)
@@ -303,13 +331,13 @@ defmodule Apitizer.QueryBuilder do
   defmacro __before_compile__(env) do
     attributes = Module.get_attribute(env.module, :apitizer_attributes) |> Enum.reverse()
     associations = Module.get_attribute(env.module, :apitizer_associations)
-    # filters = Module.get_attribute(env.module, :apitizer_filters)
+    filters = Module.get_attribute(env.module, :apitizer_filters)
     # sorts = Module.get_attribute(env.module, :apitizer_sorts)
 
     quote do
       unquote(compile(:attribute, attributes))
       unquote(compile(:association, associations))
-      # unquote(compile(:filter, filters))
+      unquote(compile(:filter, filters))
       # unquote(compile(:sort, sorts))
     end
   end
@@ -318,8 +346,7 @@ defmodule Apitizer.QueryBuilder do
   def __attribute__(module, name, opts) do
     opts =
       opts
-      |> Keyword.put_new(:operators, Module.get_attribute(module, :operators))
-      |> Keyword.put_new(:sortable, false)
+      |> Keyword.put_new(:operators, Module.get_attribute(module, :default_operators))
       |> Keyword.put_new(:key, name)
       |> Keyword.put(:name, name)
       |> Keyword.put(:alias, name)
@@ -344,10 +371,25 @@ defmodule Apitizer.QueryBuilder do
     Module.put_attribute(module, :apitizer_associations, {name, struct})
   end
 
+  @doc false
+  def __filter__(module, field, operator, body) do
+    struct = %Filter{field: field, operator: operator, apidoc: apidoc(module)} |> Macro.escape()
+
+    Module.put_attribute(module, :apitizer_filters, {struct, body})
+  end
+
   defp apidoc(module) do
     result = Module.get_attribute(module, :apidoc)
     Module.delete_attribute(module, :apidoc)
     result
+  end
+
+  defp compile(:filter, filters) do
+    quote do
+      def __filters__(), do: unquote(Enum.map(filters, fn {struct, _} -> struct end))
+      unquote(Enum.map(filters, fn {_, body} -> body end))
+      def filter(query, _, _, _, _, _, _), do: nil
+    end
   end
 
   # Compiles all the different attributes, associations, filters, etc. to
@@ -379,6 +421,8 @@ defmodule Apitizer.QueryBuilder do
   defp expand_alias({:__aliases__, _, _} = ast, env), do: Macro.expand(ast, env)
   defp expand_alias(ast, _env), do: ast
 
+  defp interpret_expr(dynamics, _, {_, :*, _}), do: dynamics
+
   defp interpret_expr(dynamics, :and, {:eq, field, value}),
     do: dynamic([q], field(q, ^field) == ^value and ^dynamics)
 
@@ -400,6 +444,12 @@ defmodule Apitizer.QueryBuilder do
   defp interpret_expr(dynamics, :and, {:in, field, values}),
     do: dynamic([q], field(q, ^field) in ^values and ^dynamics)
 
+  defp interpret_expr(dynamics, :and, {:like, field, value}),
+    do: dynamic([q], like(field(q, ^field), ^value) and ^dynamics)
+
+  defp interpret_expr(dynamics, :and, {:ilike, field, value}),
+    do: dynamic([q], ilike(field(q, ^field), ^value) and ^dynamics)
+
   defp interpret_expr(dynamics, :or, {:eq, field, value}),
     do: dynamic([q], field(q, ^field) == ^value or ^dynamics)
 
@@ -420,4 +470,12 @@ defmodule Apitizer.QueryBuilder do
 
   defp interpret_expr(dynamics, :or, {:in, field, values}),
     do: dynamic([q], field(q, ^field) in ^values or ^dynamics)
+
+  defp interpret_expr(dynamics, :or, {:like, field, value}),
+    do: dynamic([q], like(field(q, ^field), ^value) or ^dynamics)
+
+  defp interpret_expr(dynamics, :or, {:ilike, field, value}),
+    do: dynamic([q], ilike(field(q, ^field), ^value) or ^dynamics)
+
+  defp interpret_expr(dynamics, _, _), do: dynamics
 end

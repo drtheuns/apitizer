@@ -6,7 +6,7 @@ defmodule Apitizer.Parser do
   ## Example
 
       iex> parse_filter("and(grade.gte.90,student.eq.true,or(age.gte.14,age.eq.null))")
-      [and: [{:gte, "grade", 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]]
+      {:and, [{:gte, "grade", 90}, {:eq, "student", true}, {:or, [{:gte, "age", 14}, {:eq, "age", nil}]}]}
 
   See the `test/apitizer/parser_test.exs` for many more examples.
   """
@@ -15,7 +15,7 @@ defmodule Apitizer.Parser do
 
   # Order of these is importants, as "gt" would match before "gte".
   # the "in" operator is special as it requires a different value.
-  @operators ["eq", "gte", "gt", "lte", "lt", "neq"]
+  @operators ["eq", "gte", "gt", "lte", "lt", "neq", "search", "ilike", "like"]
 
   @type field :: field_alias | field_assoc | String.t()
   @type field_alias :: {:alias, String.t(), String.t()}
@@ -63,7 +63,10 @@ defmodule Apitizer.Parser do
   # grade.gte.90    -> {:gte, "grade", 90}
   # id.in.(1,2,3)   -> {:in, "id", [1.0, 2.0, 3.0]}
   boolean_expr =
-    utf8_string([{:not, ?,}, {:not, ?.}], min: 1)
+    choice([
+      string("*") |> replace(:*),
+      utf8_string([{:not, ?,}, {:not, ?.}], min: 1)
+    ])
     |> ignore(string("."))
     |> choice([
       string("in")
@@ -179,7 +182,7 @@ defmodule Apitizer.Parser do
   Example:
 
   iex> parse_filter("and(student.eq.true,grade.gte.90)")
-  [and: [{:eq, "student", true}, {:gte, "grade", 90}]]
+  {:and, [{:eq, "student", true}, {:gte, "grade", 90}]}
 
   See `test/apitizer/parser_test.exs` for more examples.
   """
