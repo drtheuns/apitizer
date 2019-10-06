@@ -18,6 +18,10 @@ defmodule Apitizer.QueryBuilder do
     defstruct [:field, :operator, :apidoc]
   end
 
+  defmodule Sort do
+    defstruct [:field, :apidoc]
+  end
+
   @doc """
   Defines a new attribute to be visible to the client.
 
@@ -80,6 +84,18 @@ defmodule Apitizer.QueryBuilder do
     end
   end
 
+  defmacro sort(field, direction, query, context, do: do_block)
+           when is_atom(field) or is_binary(field) do
+    body =
+      quote do
+        def sort(unquote_splicing([field, direction, query, context])), do: unquote(do_block)
+      end
+
+    quote do
+      Apitizer.QueryBuilder.__sort__(__MODULE__, unquote(field), unquote(body))
+    end
+  end
+
   def all(builder, %Plug.Conn{} = conn, opts \\ []) do
     tree = build_render_tree(builder, conn, opts)
     repo = Keyword.get(opts, :repo, builder.__repo__)
@@ -93,6 +109,11 @@ defmodule Apitizer.QueryBuilder do
       conn.query_params
       |> Map.get(Keyword.get(opts, :filter_key, "filter"))
       |> Parser.parse_filter()
+
+    sorts =
+      conn.query_params
+      |> Map.get(Keyword.get(opts, :sort_key, "sort"))
+      |> Parser.parse_sort()
 
     unless is_atom(repo) and repo != nil do
       raise ArgumentError,
@@ -116,6 +137,7 @@ defmodule Apitizer.QueryBuilder do
     |> apply_filters(filters, tree, context)
     |> apply_select(tree)
     |> apply_preload(tree, context)
+    |> apply_sort(sorts, tree, context)
     |> repo.all()
     |> apply_transform(tree)
   end
@@ -251,6 +273,21 @@ defmodule Apitizer.QueryBuilder do
     |> apply_filters(parent_and_or, tail, tree, context)
   end
 
+  defp apply_sort(query, sorts, tree, context) do
+    Enum.reduce(sorts, query, fn {sort_direction, field}, query ->
+      case tree.builder.sort(field, sort_direction, query, context) do
+        nil ->
+          case tree.builder.__attribute__(field) do
+            nil -> query
+            attribute -> from(q in query, order_by: [{^sort_direction, field(q, ^attribute.key)}])
+          end
+
+        updated_query ->
+          updated_query
+      end
+    end)
+  end
+
   defp apply_transform(resources, tree) when is_list(resources) do
     Enum.map(resources, &apply_transform(&1, tree))
   end
@@ -332,13 +369,13 @@ defmodule Apitizer.QueryBuilder do
     attributes = Module.get_attribute(env.module, :apitizer_attributes) |> Enum.reverse()
     associations = Module.get_attribute(env.module, :apitizer_associations)
     filters = Module.get_attribute(env.module, :apitizer_filters)
-    # sorts = Module.get_attribute(env.module, :apitizer_sorts)
+    sorts = Module.get_attribute(env.module, :apitizer_sorts)
 
     quote do
       unquote(compile(:attribute, attributes))
       unquote(compile(:association, associations))
       unquote(compile(:filter, filters))
-      # unquote(compile(:sort, sorts))
+      unquote(compile(:sort, sorts))
     end
   end
 
@@ -378,6 +415,13 @@ defmodule Apitizer.QueryBuilder do
     Module.put_attribute(module, :apitizer_filters, {struct, body})
   end
 
+  @doc false
+  def __sort__(module, field, body) do
+    struct = %Sort{field: field, apidoc: apidoc(module)} |> Macro.escape()
+
+    Module.put_attribute(module, :apitizer_sorts, {struct, body})
+  end
+
   defp apidoc(module) do
     result = Module.get_attribute(module, :apidoc)
     Module.delete_attribute(module, :apidoc)
@@ -388,7 +432,15 @@ defmodule Apitizer.QueryBuilder do
     quote do
       def __filters__(), do: unquote(Enum.map(filters, fn {struct, _} -> struct end))
       unquote(Enum.map(filters, fn {_, body} -> body end))
-      def filter(query, _, _, _, _, _, _), do: nil
+      def filter(_, _, _, _, _, _, _), do: nil
+    end
+  end
+
+  defp compile(:sort, sorts) do
+    quote do
+      def __sorts__(), do: unquote(Enum.map(sorts, fn {struct, _} -> struct end))
+      unquote(Enum.map(sorts, fn {_, body} -> body end))
+      def sort(_, _, _, _), do: nil
     end
   end
 

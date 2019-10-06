@@ -90,7 +90,7 @@ defmodule Apitizer.Parser do
       ["id", "name", {:assoc, "posts", [:all, {:assoc, {:alias, "comments", "reactions"}, [:all]}]}]
   """
   @spec parse_select(String.t()) :: [select_field]
-  def parse_select(query_string), do: parse(&select/1, query_string, [])
+  def parse_select(query_string), do: parse(&select/1, query_string, [:all])
 
   @doc """
   Parses a sort expressions as would be passed on the request.
@@ -114,6 +114,7 @@ defmodule Apitizer.Parser do
 
   defp parse(_parser, _query_string, default), do: default
 
+  defp parse_or_default({:ok, [], _, _, _, _}, default), do: default
   defp parse_or_default({:ok, fields, _, _, _, _}, _), do: fields
   defp parse_or_default({:ok, value}, _), do: value
   defp parse_or_default(_, default), do: default
