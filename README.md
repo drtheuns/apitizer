@@ -32,3 +32,4 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
       Three levels of repo definition, in order of priority: argument > module > config
 - [X] Allow select_key, sort_key and filter_key to be defined in the config.
 - [ ] Filters on preload
+- [ ] Add {asc,desc}_nulls_{first,last} to the parser & builder.

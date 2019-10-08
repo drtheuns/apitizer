@@ -56,7 +56,7 @@ defmodule Apitizer.Parser do
   @type filter_and_or :: {:and | :or, [filter_expression | filter_operator]}
   @type filter_expression :: {filter_operator, filter_field, filter_value}
   @type filter_operator ::
-          :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like | :contains
+          :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like | :contains | :in
   @type filter_field :: :* | String.t()
   @type filter_value :: String.t() | integer() | float()
 
