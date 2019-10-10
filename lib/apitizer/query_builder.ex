@@ -13,7 +13,8 @@ defmodule Apitizer.QueryBuilder do
   TODO: APIDOC
   TODO: Callback cycle.
   """
-  alias Apitizer.QueryBuilder.{Builder, Context, Interpreter}
+  import Ecto.Query
+  alias Apitizer.{Builder, Context, Interpreter}
 
   @doc """
   A query builder hook which is called before the filters are applied.
@@ -81,7 +82,7 @@ defmodule Apitizer.QueryBuilder do
     quote do
       import Apitizer.QueryBuilder
 
-      @before_compile Apitizer.QueryBuilder.Builder
+      @before_compile Apitizer.Builder
 
       @behaviour Apitizer.QueryBuilder
       @operators [:eq, :neq, :gte, :gt, :lte, :lt, :in, :ilike, :like, :search]
@@ -91,14 +92,14 @@ defmodule Apitizer.QueryBuilder do
       Module.register_attribute(__MODULE__, :apitizer_associations, accumulate: true)
       Module.register_attribute(__MODULE__, :apitizer_filters, accumulate: true)
       Module.register_attribute(__MODULE__, :apitizer_sorts, accumulate: true)
+      Module.register_attribute(__MODULE__, :apitizer_transforms, accumulate: true)
       Module.register_attribute(__MODULE__, :apidoc, accumulate: false)
 
       def __schema__, do: unquote(schema)
       def __repo__, do: unquote(repo)
 
       def query(conn, opts \\ []), do: Interpreter.query(__MODULE__, conn, opts)
-      def one!(conn, opts \\ []), do: Interpreter.one!(__MODULE__, conn, opts)
-      def all(conn, opts \\ []), do: Interpreter.all(__MODULE__, conn, opts)
+      def one!(conn, id, opts \\ []), do: Interpreter.one!(__MODULE__, id, conn, opts)
       def paginate(conn, opts \\ []), do: Interpreter.paginate(__MODULE__, conn, opts)
 
       def before_filters(query, _), do: query
@@ -117,7 +118,10 @@ defmodule Apitizer.QueryBuilder do
                      before_sort: 2,
                      after_sort: 2,
                      before_preload: 2,
-                     after_preload: 2
+                     after_preload: 2,
+                     query: 2,
+                     one!: 2,
+                     paginate: 2
     end
   end
 
@@ -193,6 +197,103 @@ defmodule Apitizer.QueryBuilder do
 
     quote do
       Builder.__sort__(__MODULE__, unquote(field), unquote(body))
+    end
+  end
+
+  @doc """
+  Defines a transformation function on either an attribute or an association.
+  """
+  defmacro transform(field_or_assoc, value, context, do: do_block) when is_atom(field_or_assoc) do
+    body =
+      quote do
+        def transform(unquote(field_or_assoc), unquote(value), unquote(context)),
+          do: unquote(do_block)
+      end
+
+    quote do
+      Builder.__transform__(__MODULE__, unquote(field_or_assoc), unquote(body))
+    end
+  end
+
+  @doc """
+  Joins on the given `assoc` if the query doesn't yet have that named binding.
+
+  This can be useful when you want to ensure a join exists, for example when it
+  might or might not have already been created in an earlier filter.
+
+  ## Example
+
+  In the following code, only a one join will be performed on either query:
+
+      from(post in Post) |> maybe_join(:comments)
+      from(post in Post, join: c in assoc(post, :comments), as: :comments) |> maybe_join(:comments)
+  """
+  defmacro maybe_join(query, assoc, as \\ nil) when is_atom(assoc) and is_atom(as) do
+    as = as || assoc
+
+    quote do
+      query = unquote(query)
+
+      if has_named_binding?(query, unquote(as)) do
+        query
+      else
+        from(q in query, join: assoc(q, unquote(assoc)), as: unquote(as))
+      end
+    end
+  end
+
+  @doc """
+  Helper macro to extend a dynamic expression for both the "AND" and "OR" cases.
+
+  This is particularly useful for custom filters where the and/or is not known up front.
+
+  ## Example
+
+  Assuming a database model in which a Task can be in a State:
+
+  ```elixir
+  defmodule TaskBuilder do
+    use Apitizer.QueryBuilder, schema: Task
+
+    attribute :id
+    attribute :time_estimate, operators: [:lte] # in seconds
+    attribute :priority, operators: [:gte] # 1..5 (very low..very high)
+
+    filter "states", :in, values, query, dynamics, and_or, _context do
+      # Ensure the join exists.
+      query = maybe_join(query, :state)
+
+      # Add the WHERE clause.
+      dynamics = extend_dynamics(dynamics, and_or, [state: state], state.name in ^values)
+
+      {query, dynamics}
+    end
+  end
+  ```
+
+  The advantage of this, rather than placing it on the query directly, is that
+  the caller is now free to place this "states" condition anywhere in their query:
+
+      /tasks?filter=priority.gte.4,or(time_estimate.lte.60, states.in.(todo,waiting))
+
+  Results in:
+
+  ```sql
+  select t0.id
+    from tasks as t0
+    join task_states as t1 on t0.state_id = t1.id
+   where (t0.priority >= 4)
+     and ((t0.time_estimate <= 60) or (t0.id = ANY(ARRAY['todo', 'waiting'])));
+  ```
+  """
+  defmacro extend_dynamics(dynamics, and_or, bindings, expr) do
+    quote do
+      dynamics = unquote(dynamics)
+
+      case unquote(and_or) do
+        :and -> dynamic(unquote(bindings), unquote(expr) and ^dynamics)
+        :or -> dynamic(unquote(bindings), unquote(expr) or ^dynamics)
+      end
     end
   end
 end

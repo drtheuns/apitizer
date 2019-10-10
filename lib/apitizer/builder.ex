@@ -1,10 +1,18 @@
-defmodule Apitizer.QueryBuilder.Builder do
+defmodule Apitizer.Builder do
   @moduledoc false
   # This module handles most of the metaprogramming needed to builder the query
   # builder modules.
 
   defmodule Attribute do
-    defstruct [:name, :operators, :key, :alias, :apidoc, virtual: false, sortable: false]
+    defstruct [
+      :name,
+      :operators,
+      :key,
+      :alias,
+      :apidoc,
+      virtual: false,
+      sortable: false
+    ]
   end
 
   defmodule Association do
@@ -17,6 +25,11 @@ defmodule Apitizer.QueryBuilder.Builder do
 
   defmodule Sort do
     defstruct [:field, :apidoc]
+  end
+
+  defmodule Transform do
+    # type: :assocation | :attribute
+    defstruct [:field, :type]
   end
 
   def __attribute__(module, name, opts) do
@@ -58,6 +71,10 @@ defmodule Apitizer.QueryBuilder.Builder do
     Module.put_attribute(module, :apitizer_sorts, {struct, body})
   end
 
+  def __transform__(module, field_or_assoc, body) do
+    Module.put_attribute(module, :apitizer_transforms, {field_or_assoc, body})
+  end
+
   defp apidoc(module) do
     result = Module.get_attribute(module, :apidoc)
     Module.delete_attribute(module, :apidoc)
@@ -70,11 +87,29 @@ defmodule Apitizer.QueryBuilder.Builder do
     filters = Module.get_attribute(env.module, :apitizer_filters)
     sorts = Module.get_attribute(env.module, :apitizer_sorts)
 
+    # We can only build this now, once all the other attributes are known.
+    transforms =
+      env.module
+      |> Module.get_attribute(:apitizer_transforms)
+      |> Enum.reduce([], fn {field, body}, acc ->
+        cond do
+          transform_type?(field, attributes) ->
+            [{%Transform{field: field, type: :attribute} |> Macro.escape(), body} | acc]
+
+          transform_type?(field, associations) ->
+            [{%Transform{field: field, type: :association} |> Macro.escape(), body} | acc]
+
+          true ->
+            acc
+        end
+      end)
+
     quote do
       unquote(compile(:attribute, attributes))
       unquote(compile(:association, associations))
       unquote(compile(:filter, filters))
       unquote(compile(:sort, sorts))
+      unquote(compile(:transform, transforms))
     end
   end
 
@@ -91,6 +126,14 @@ defmodule Apitizer.QueryBuilder.Builder do
       def __sorts__(), do: unquote(Enum.map(sorts, fn {struct, _} -> struct end))
       unquote(Enum.map(sorts, fn {_, body} -> body end))
       def sort(_, _, _, _), do: nil
+    end
+  end
+
+  defp compile(:transform, transforms) do
+    quote do
+      def __transforms__(), do: unquote(Enum.map(transforms, fn {struct, _} -> struct end))
+      unquote(Enum.map(transforms, fn {_, body} -> body end))
+      def transform(_field, value, _context), do: value
     end
   end
 
@@ -119,4 +162,22 @@ defmodule Apitizer.QueryBuilder.Builder do
       def unquote(plural)(), do: unquote(value_names)
     end
   end
+
+  defp transform_type?(_transform, []), do: false
+
+  defp transform_type?(transform, [{_, struct} | tail]) do
+    if kv_in_ast_struct?({:key, transform}, struct) do
+      true
+    else
+      transform_type?(transform, tail)
+    end
+  end
+
+  defp kv_in_ast_struct?(kv, {:%{}, [], keywords}) do
+    keyword_has_kv?(kv, keywords)
+  end
+
+  defp keyword_has_kv?(_, []), do: false
+  defp keyword_has_kv?({key, value}, [{key, value} | _]), do: true
+  defp keyword_has_kv?(kv, [_ | tail]), do: keyword_has_kv?(kv, tail)
 end

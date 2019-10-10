@@ -7,6 +7,7 @@ defmodule Apitizer.RenderTree do
     * `:name`: the name of the subtree as would be returned to the client.
     * `:key`: the key to the relation on the struct.
     * `:builder`: the builder module that will render this (sub)tree.
+    * `:schema`: the ecto schema for this node.
     * `:fields`: the attribute fields to return in the response.
     * `:apidoc`: documentation for the node.
     * `:children`: the nested relationships to render.
@@ -14,5 +15,5 @@ defmodule Apitizer.RenderTree do
   The `:key` and `:name` fields are `nil` for the root node.
   """
 
-  defstruct [:name, :builder, :fields, :key, :apidoc, children: %{}]
+  defstruct [:name, :builder, :schema, :fields, :key, :apidoc, children: %{}]
 end

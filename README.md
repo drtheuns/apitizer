@@ -20,11 +20,11 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
   - [ ] Can user apply filter?
   - [ ] Can user perform this sort?
   - [ ] Can user see certain attributes?
-- [ ] Add hooks throughout the building process
-  - [ ] before/after adding filters
-  - [ ] before/after adding preload
-  - [ ] before/after adding select
-  - [ ] before/after applying transformations
+- [X] Add hooks throughout the building process
+  - [X] before/after adding filters
+  - [X] before/after adding preload
+  - [X] before/after adding select
+  - [X] before/after adding sort
 - [ ] Add support for pagination. Custom paginators? Behaviour? Protocol?
       Maybe implement some defaults for popular pagination libraries? Scivener?
 - [ ] Add maxdepth for includes.
@@ -33,3 +33,4 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [X] Allow select_key, sort_key and filter_key to be defined in the config.
 - [ ] Filters on preload
 - [ ] Add {asc,desc}_nulls_{first,last} to the parser & builder.
+- [ ] Add hook to transform a response once more with the original struct/resource.

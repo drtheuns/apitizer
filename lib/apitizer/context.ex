@@ -1,10 +1,11 @@
-defmodule Apitizer.QueryBuilder.Context do
+defmodule Apitizer.Context do
   @moduledoc false
 
   defstruct filter_key: nil,
             sort_key: nil,
             select_key: nil,
             repo: nil,
+            repo_function: nil,
             raw_filters: nil,
             raw_sort: nil,
             raw_select: nil,
