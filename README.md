@@ -25,9 +25,9 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
   - [X] before/after adding preload
   - [X] before/after adding select
   - [X] before/after adding sort
-- [ ] Add support for pagination. Custom paginators? Behaviour? Protocol?
-      Maybe implement some defaults for popular pagination libraries? Scivener?
-- [ ] Add maxdepth for includes.
+- [X] Add support for pagination. Custom paginators? Behaviour? Protocol?
+- [ ] Maybe implement some defaults for popular pagination libraries? Scivener?
+- [X] Add maxdepth for includes.
 - [ ] Allow Repo to be configured once (bit of a pain to do it for every module.)
       Three levels of repo definition, in order of priority: argument > module > config
 - [X] Allow select_key, sort_key and filter_key to be defined in the config.

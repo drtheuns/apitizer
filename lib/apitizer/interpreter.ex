@@ -14,6 +14,7 @@ defmodule Apitizer.Interpreter do
           | {:select_key, String.t()}
           | {:repo, atom()}
           | {:repo_function, (repo :: module(), Ecto.Queryable.t() -> map | list)}
+          | {:max_depth, :infinite | pos_integer}
   @type options :: [option]
 
   @doc """
@@ -56,6 +57,19 @@ defmodule Apitizer.Interpreter do
     sort_key = option_or_config(opts, :sort_key, "sort")
     select_key = option_or_config(opts, :select_key, "select")
 
+    max_depth =
+      case option_or_config(opts, :max_depth, 4) do
+        :infinite ->
+          :infinite
+
+        number when is_integer(number) and number > 0 ->
+          number
+
+        _ ->
+          raise ArgumentError,
+            message: "The max depth must either be :infinite or a positive integer."
+      end
+
     if repo == nil or !is_atom(repo) do
       raise ArgumentError,
         message: """
@@ -85,7 +99,8 @@ defmodule Apitizer.Interpreter do
       parsed_filters: Parser.parse_filter(Map.get(conn.query_params, filter_key)),
       parsed_sort: Parser.parse_sort(Map.get(conn.query_params, sort_key)),
       parsed_select: Parser.parse_select(Map.get(conn.query_params, select_key)),
-      assigns: Map.put(conn.assigns, :conn, conn)
+      assigns: Map.put(conn.assigns, :conn, conn),
+      max_depth: max_depth
     }
 
     build_render_tree(query_builder, context)
@@ -136,13 +151,19 @@ defmodule Apitizer.Interpreter do
   end
 
   defp build_render_tree(query_builder, context) do
-    render_tree = build_render_tree(query_builder, context.parsed_select, nil, nil, nil)
+    # render_tree = build_render_tree(query_builder, context.parsed_select, nil, nil, nil)
+    render_tree = build_render_tree(query_builder, nil, context.parsed_select, context, 1)
+
     %{context | render_tree: render_tree}
   end
 
-  defp build_render_tree(query_builder, fields, name, key, apidoc) do
+  defp build_render_tree(_, _, _, %{max_depth: max_depth}, current_depth)
+       when is_integer(max_depth) and current_depth > max_depth,
+       do: nil
+
+  defp build_render_tree(query_builder, association, selects, context, depth) do
     {assoc, fields} =
-      Enum.split_with(fields, fn
+      Enum.split_with(selects, fn
         {:assoc, _, _} -> true
         _ -> false
       end)
@@ -155,14 +176,30 @@ defmodule Apitizer.Interpreter do
         false -> Enum.reduce(fields, [], &filter_fields(query_builder, name_and_alias(&1), &2))
       end
 
+    children =
+      Enum.reduce(assoc, %{}, fn {:assoc, assoc, assoc_selects}, acc ->
+        {name, name_alias} = name_and_alias(assoc)
+
+        case query_builder.__association__(name) do
+          %Association{} = assoc ->
+            case build_render_tree(assoc.builder, assoc, assoc_selects, context, depth + 1) do
+              nil -> acc
+              child_tree -> Map.put(acc, name_alias, child_tree)
+            end
+
+          _ ->
+            acc
+        end
+      end)
+
     %RenderTree{
-      name: name,
-      key: key,
+      name: (association && association.name) || nil,
+      key: (association && association.key) || nil,
       builder: query_builder,
       schema: query_builder.__schema__(),
       fields: fields,
-      children: build_children(query_builder, assoc),
-      apidoc: apidoc
+      children: children,
+      apidoc: (association && association.apidoc) || nil
     }
   end
 
@@ -172,21 +209,6 @@ defmodule Apitizer.Interpreter do
       _ -> acc
     end
   end
-
-  defp build_children(builder, associations, acc \\ %{})
-  defp build_children(_, [], acc), do: acc
-
-  defp build_children(builder, [{:assoc, assoc, children} | tail], acc) do
-    {name, name_alias} = name_and_alias(assoc)
-    acc = build_child(builder.__association__(name), name_alias, children, acc)
-    build_children(builder, tail, acc)
-  end
-
-  defp build_child(%Association{} = assoc, name, children, acc) do
-    Map.put(acc, name, build_render_tree(assoc.builder, children, name, assoc.key, assoc.apidoc))
-  end
-
-  defp build_child(_, _, _, acc), do: acc
 
   def apply_filters(query, %{parsed_filters: {and_or, expressions}} = context) do
     {query, dynamics} = do_apply_filters({query, and_or == :and}, and_or, expressions, context)
