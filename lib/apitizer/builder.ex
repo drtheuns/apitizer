@@ -122,18 +122,36 @@ defmodule Apitizer.Builder do
   end
 
   defp compile(:sort, sorts) do
+    singular =
+      for %{field: field} = sort <- sorts do
+        quote do
+          def __sort__(unquote(field)), do: unquote(sort)
+          def __sort__(unquote(to_string(field))), do: unquote(sort)
+        end
+      end
+
     quote do
       def __sorts__(), do: unquote(Enum.map(sorts, fn {struct, _} -> struct end))
+      unquote(singular)
       unquote(Enum.map(sorts, fn {_, body} -> body end))
       def sort(_, _, _, _), do: nil
     end
   end
 
   defp compile(:transform, transforms) do
+    singular =
+      for %{field: field} = transform <- transforms do
+        quote do
+          def __transform__(unquote(field)), do: unquote(transform)
+          def __transform__(unquote(to_string(field))), do: unquote(transform)
+        end
+      end
+
     quote do
       def __transforms__(), do: unquote(Enum.map(transforms, fn {struct, _} -> struct end))
+      unquote(singular)
       unquote(Enum.map(transforms, fn {_, body} -> body end))
-      def transform(_field, value, _context), do: value
+      def transform(_field, value, _resource, _context), do: value
     end
   end
 

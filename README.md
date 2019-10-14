@@ -7,7 +7,7 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [X] Add more operators to the filter parser, keep some in reserve (such as
       "search" and other common, custom logic).
       ["search", "contains", "like", "ilike"]
-- [X] Add ability for custom preload
+- [ ] Add ability for custom preload
 - [X] Add ability for custom sorting
 - [X] It should be possible to overwrite an operator.
 - [ ] Generate documentation from a query builder.
@@ -16,10 +16,10 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [ ] Write documentation
 - [ ] Allow the querybuilder to be used to _just_ build the query, not execute it on
       the repo & generating a response.
-- [ ] Add hooks for permission checks:
+- [-] Add hooks for permission checks:
   - [ ] Can user apply filter?
   - [ ] Can user perform this sort?
-  - [ ] Can user see certain attributes?
+  - [X] Can user see certain attributes?
 - [X] Add hooks throughout the building process
   - [X] before/after adding filters
   - [X] before/after adding preload
@@ -28,9 +28,11 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 - [X] Add support for pagination. Custom paginators? Behaviour? Protocol?
 - [ ] Maybe implement some defaults for popular pagination libraries? Scivener?
 - [X] Add maxdepth for includes.
-- [ ] Allow Repo to be configured once (bit of a pain to do it for every module.)
+- [X] Allow Repo to be configured once (bit of a pain to do it for every module.)
       Three levels of repo definition, in order of priority: argument > module > config
 - [X] Allow select_key, sort_key and filter_key to be defined in the config.
 - [ ] Filters on preload
 - [ ] Add {asc,desc}_nulls_{first,last} to the parser & builder.
-- [ ] Add hook to transform a response once more with the original struct/resource.
+- [ ] Respect the `sortable` field on an attribute.
+- [ ] Raise compile warning (not error) when transform function is defined for
+      undefined attribute/assoc.

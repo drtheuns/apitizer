@@ -61,6 +61,31 @@ defmodule Apitizer.QueryBuilder do
   """
   @callback after_preload(Ecto.Queryable.t(), Context.t()) :: Ecto.Queryable.t()
 
+  @doc """
+  Callback that is used to determine whether the caller may select an attribute
+  or association.
+
+  This is called while building the query. If these permissions aren't known for
+  an attribute until the value is known, refer to `c:may_see?/3`.
+
+  Some fields are always fetched from the database: the primary key and the
+  foreign keys needed to preload some related resource. For this reason, adding
+  a `may_select?/2` callback for e.g. the primary key is not very useful.
+  """
+  @callback may_select?(atom(), Context.t()) :: boolean
+
+  @doc """
+  Callback that is used to determine if the caller is allowed to see an
+  attribute or association.
+
+  This is called after the result of a query has been fetched, while building
+  the final response map _before_ the transform function is called. Use this
+  when the permissions of an attribute or association are only known once their
+  values are known. If they're known earlier (e.g. based on the logged in user),
+  prefer `c:may_select?/3`, as this might improve database performance.
+  """
+  @callback may_see?(atom(), struct, Context.t()) :: boolean
+
   @doc false
   defmacro __using__(opts) do
     schema = Keyword.get(opts, :schema) |> expand_alias(__CALLER__)
@@ -102,6 +127,7 @@ defmodule Apitizer.QueryBuilder do
       def one!(conn, id, opts \\ []), do: Interpreter.one!(__MODULE__, id, conn, opts)
       def paginate(conn, opts \\ []), do: Interpreter.paginate(__MODULE__, conn, opts)
 
+      # Hooks
       def before_filters(query, _), do: query
       def after_filters(query, _), do: query
       def before_select(query, _), do: query
@@ -110,6 +136,10 @@ defmodule Apitizer.QueryBuilder do
       def after_sort(query, _), do: query
       def before_preload(query, _), do: query
       def after_preload(query, _), do: query
+
+      # Permissions
+      def may_select?(_field_or_assoc, _context), do: true
+      def may_see?(_field_or_assoc, _resource, _context), do: true
 
       defoverridable before_filters: 2,
                      after_filters: 2,
@@ -121,7 +151,9 @@ defmodule Apitizer.QueryBuilder do
                      after_preload: 2,
                      query: 2,
                      one!: 2,
-                     paginate: 2
+                     paginate: 2,
+                     may_select?: 2,
+                     may_see?: 3
     end
   end
 
@@ -203,11 +235,17 @@ defmodule Apitizer.QueryBuilder do
   @doc """
   Defines a transformation function on either an attribute or an association.
   """
-  defmacro transform(field_or_assoc, value, context, do: do_block) when is_atom(field_or_assoc) do
+  defmacro transform(field_or_assoc, value, resource, context, do: do_block)
+           when is_atom(field_or_assoc) do
     body =
       quote do
-        def transform(unquote(field_or_assoc), unquote(value), unquote(context)),
-          do: unquote(do_block)
+        def transform(
+              unquote(field_or_assoc),
+              unquote(value),
+              unquote(resource),
+              unquote(context)
+            ),
+            do: unquote(do_block)
       end
 
     quote do

@@ -18,7 +18,7 @@ defmodule Apitizer.Interpreter do
   @type options :: [option]
 
   @doc """
-  TODO
+  Build the query based on the request.
   """
   @spec query(module(), Plug.Conn.t(), options) :: Ecto.Queryable.t()
   def query(query_builder, %Plug.Conn{} = conn, opts \\ [])
@@ -50,7 +50,8 @@ defmodule Apitizer.Interpreter do
     build_paginate(query_builder, from_conn(query_builder, conn, opts))
   end
 
-  defp from_conn(query_builder, %Plug.Conn{} = conn, opts) do
+  @doc false
+  def from_conn(query_builder, %Plug.Conn{} = conn, opts) do
     repo = option_or_config(opts, :repo, query_builder.__repo__)
     repo_function = Keyword.get(opts, :repo_function)
     filter_key = option_or_config(opts, :filter_key, "filter")
@@ -172,23 +173,31 @@ defmodule Apitizer.Interpreter do
     # so we need to make sure we don't get duplicate attributes.
     fields =
       case Enum.member?(fields, :all) do
-        true -> query_builder.__attributes__() |> Enum.map(&query_builder.__attribute__/1)
-        false -> Enum.reduce(fields, [], &filter_fields(query_builder, name_and_alias(&1), &2))
+        true ->
+          query_builder.__attributes__() |> Enum.map(&query_builder.__attribute__/1)
+
+        false ->
+          Enum.reduce(fields, [], fn field, acc ->
+            with {name, name_alias} <- name_and_alias(field),
+                 %Attribute{} = attribute <- query_builder.__attribute__(name),
+                 true <- may_select?(attribute.name, context) do
+              [%{attribute | alias: name_alias} | acc]
+            else
+              _ -> acc
+            end
+          end)
       end
 
     children =
       Enum.reduce(assoc, %{}, fn {:assoc, assoc, assoc_selects}, acc ->
-        {name, name_alias} = name_and_alias(assoc)
-
-        case query_builder.__association__(name) do
-          %Association{} = assoc ->
-            case build_render_tree(assoc.builder, assoc, assoc_selects, context, depth + 1) do
-              nil -> acc
-              child_tree -> Map.put(acc, name_alias, child_tree)
-            end
-
-          _ ->
-            acc
+        with {name, name_alias} <- name_and_alias(assoc),
+             %Association{} = assoc <- query_builder.__association__(name),
+             true <- may_select?(assoc.name, query_builder, context),
+             %RenderTree{} = child_tree <-
+               build_render_tree(assoc.builder, assoc, assoc_selects, context, depth + 1) do
+          Map.put(acc, name_alias, child_tree)
+        else
+          _ -> acc
         end
       end)
 
@@ -203,12 +212,14 @@ defmodule Apitizer.Interpreter do
     }
   end
 
-  defp filter_fields(builder, {field, field_alias}, acc) do
-    case builder.__attribute__(field) do
-      %Attribute{} = attr -> [%{attr | alias: field_alias} | acc]
-      _ -> acc
-    end
-  end
+  defp may_select?(field_or_assoc, %{render_tree: %{builder: builder}} = context),
+    do: builder.may_select?(field_or_assoc, context)
+
+  defp may_select?(field_or_assoc, query_builder, context) when is_atom(query_builder),
+    do: query_builder.may_select?(field_or_assoc, context)
+
+  defp may_see?(field_or_assoc, resource, query_builder, context) when is_atom(query_builder),
+    do: query_builder.may_see?(field_or_assoc, resource, context)
 
   def apply_filters(query, %{parsed_filters: {and_or, expressions}} = context) do
     {query, dynamics} = do_apply_filters({query, and_or == :and}, and_or, expressions, context)
@@ -316,20 +327,28 @@ defmodule Apitizer.Interpreter do
   end
 
   defp transform_attributes(result, resource, %{render_tree: tree} = context) do
-    Enum.reduce(tree.fields, result, fn attribute, acc ->
-      value = tree.builder.transform(attribute.name, Map.get(resource, attribute.key), context)
-      Map.put(acc, attribute.alias, value)
+    Enum.reduce(tree.fields, result, fn attr, acc ->
+      if may_see?(attr.name, resource, tree.builder, context) do
+        value = tree.builder.transform(attr.name, Map.get(resource, attr.key), resource, context)
+        Map.put(acc, attr.alias, value)
+      else
+        acc
+      end
     end)
   end
 
   defp transform_associations(result, resource, %{render_tree: tree} = context) do
     Enum.reduce(tree.children, result, fn {name, subtree}, acc ->
-      value =
-        resource
-        |> Map.get(subtree.key)
-        |> apply_transform(%{context | render_tree: subtree})
+      if may_see?(name, resource, tree.builder, context) do
+        value =
+          resource
+          |> Map.get(subtree.key)
+          |> apply_transform(%{context | render_tree: subtree})
 
-      Map.put(acc, subtree.name, tree.builder.transform(name, value, context))
+        Map.put(acc, subtree.name, tree.builder.transform(name, value, resource, context))
+      else
+        acc
+      end
     end)
   end
 
