@@ -285,15 +285,13 @@ defmodule Apitizer.Interpreter do
 
   def apply_sort(query, %{parsed_sort: sorts, render_tree: %{builder: builder}} = context) do
     Enum.reduce(sorts, query, fn {sort_direction, field}, query ->
-      case builder.sort(field, sort_direction, query, context) do
-        nil ->
-          case builder.__attribute__(field) do
-            nil -> query
-            attribute -> from(q in query, order_by: [{^sort_direction, field(q, ^attribute.key)}])
-          end
-
-        updated_query ->
-          updated_query
+      with {:sort, nil} <- {:sort, builder.sort(field, sort_direction, query, context)},
+           %Attribute{} = attribute <- builder.__attribute__(field),
+           true <- attribute.sortable do
+        from(q in query, order_by: [{^sort_direction, field(q, ^attribute.key)}])
+      else
+        {:sort, updated_query} -> updated_query
+        _ -> query
       end
     end)
   end
