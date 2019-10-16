@@ -68,6 +68,9 @@ defmodule Apitizer.QueryBuilder do
   This is called while building the query. If these permissions aren't known for
   an attribute until the value is known, refer to `c:may_see?/3`.
 
+  The atom of the first argument is the **name** of the attribute/assocation,
+  not the key!
+
   Some fields are always fetched from the database: the primary key and the
   foreign keys needed to preload some related resource. For this reason, adding
   a `may_select?/2` callback for e.g. the primary key is not very useful.

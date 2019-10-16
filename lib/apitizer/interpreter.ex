@@ -174,7 +174,15 @@ defmodule Apitizer.Interpreter do
     fields =
       case Enum.member?(fields, :all) do
         true ->
-          query_builder.__attributes__() |> Enum.map(&query_builder.__attribute__/1)
+          Enum.reduce(query_builder.__attributes__(), [], fn attr, acc ->
+            attr = query_builder.__attribute__(attr)
+
+            if may_select?(attr.name, query_builder, context) do
+              [attr | acc]
+            else
+              acc
+            end
+          end)
 
         false ->
           Enum.reduce(fields, [], fn field, acc ->
