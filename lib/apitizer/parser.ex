@@ -53,10 +53,8 @@ defmodule Apitizer.Parser do
   """
   import NimbleParsec
 
-  @type filter_and_or :: {:and | :or, [filter_expression | filter_operator]}
-  @type filter_expression :: {filter_operator, filter_field, filter_value}
-  @type filter_operator ::
-          :eq | :neq | :gte | :gt | :lte | :lt | :search | :ilike | :like | :contains | :in
+  @type filter_and_or :: {:and | :or, [filter_expression | filter_and_or]}
+  @type filter_expression :: {Apitizer.operators(), filter_field, filter_value}
   @type filter_field :: :* | String.t()
   @type filter_value :: String.t() | integer() | float()
 
@@ -64,7 +62,7 @@ defmodule Apitizer.Parser do
   @type select_assoc :: {:assoc, String.t() | select_alias, [select_field]}
   @type select_alias :: {:alias, String.t(), String.t()}
 
-  @type sort :: {:asc | :desc, field :: String.t()}
+  @type sort :: {Apitizer.sort_direction(), field :: String.t()}
 
   @doc """
   Parses a filter expressions as would be passed on the request.

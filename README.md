@@ -14,11 +14,11 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
   - Expose through an endpoint in both HTML/JSON format?
   - Generate all at compile-time to basically just serve static html?
 - [ ] Write documentation
-- [ ] Allow the querybuilder to be used to _just_ build the query, not execute it on
+- [X] Allow the querybuilder to be used to _just_ build the query, not execute it on
       the repo & generating a response.
-- [-] Add hooks for permission checks:
-  - [ ] Can user apply filter?
-  - [ ] Can user perform this sort?
+- [X] Add hooks for permission checks:
+  - [X] Can user apply filter?
+  - [X] Can user perform this sort?
   - [X] Can user see certain attributes?
 - [X] Add hooks throughout the building process
   - [X] before/after adding filters
@@ -32,7 +32,8 @@ Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
       Three levels of repo definition, in order of priority: argument > module > config
 - [X] Allow select_key, sort_key and filter_key to be defined in the config.
 - [ ] Filters on preload
-- [ ] Add {asc,desc}_nulls_{first,last} to the parser & builder.
-- [ ] Respect the `sortable` field on an attribute.
+- [ ] Add {asc,desc}_nulls_{first,last} to the parser & builder. Also update the
+      typedocs in QueryBuilder & Parser.
+- [X] Respect the `sortable` field on an attribute.
 - [ ] Raise compile warning (not error) when transform function is defined for
       undefined attribute/assoc.

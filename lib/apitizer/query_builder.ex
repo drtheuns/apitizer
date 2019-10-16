@@ -71,6 +71,8 @@ defmodule Apitizer.QueryBuilder do
   Some fields are always fetched from the database: the primary key and the
   foreign keys needed to preload some related resource. For this reason, adding
   a `may_select?/2` callback for e.g. the primary key is not very useful.
+
+  By default, this function will return `true`.
   """
   @callback may_select?(atom(), Context.t()) :: boolean
 
@@ -83,8 +85,31 @@ defmodule Apitizer.QueryBuilder do
   when the permissions of an attribute or association are only known once their
   values are known. If they're known earlier (e.g. based on the logged in user),
   prefer `c:may_select?/3`, as this might improve database performance.
+
+  By default, this function will return `true`.
   """
-  @callback may_see?(atom(), struct, Context.t()) :: boolean
+  @callback may_see?(atom(), Ecto.Schema.t(), Context.t()) :: boolean
+
+  @doc """
+  Callback to determine is the caller is allowed to apply a sort to the query.
+
+  In order to sort on attributes without a custom sort function this function
+  must return true and the attribute must have `sortable: true`.
+
+  This function is also called before custom sort functions defined using the
+  `sort/5` macro. _Because_ custom sorts can be defined, this function is always
+  called using a string field name, even for attributes.
+
+  By default, this function will return `true`.
+  """
+  @callback may_sort?(String.t(), :asc | :desc, Context.t()) :: boolean
+
+  @doc """
+  Callback to determine if a user is allowed to apply a filter to the query.
+
+  By default this function will return `true`.
+  """
+  @callback may_filter?(String.t() | :*, Apitizer.operator(), any, Context.t()) :: boolean
 
   @doc false
   defmacro __using__(opts) do
@@ -140,6 +165,8 @@ defmodule Apitizer.QueryBuilder do
       # Permissions
       def may_select?(_field_or_assoc, _context), do: true
       def may_see?(_field_or_assoc, _resource, _context), do: true
+      def may_sort?(_field_or_assoc, _sort_direction, _context), do: true
+      def may_filter?(_field, _operator, _value, _context), do: true
 
       defoverridable before_filters: 2,
                      after_filters: 2,
@@ -153,7 +180,9 @@ defmodule Apitizer.QueryBuilder do
                      one!: 2,
                      paginate: 2,
                      may_select?: 2,
-                     may_see?: 3
+                     may_see?: 3,
+                     may_sort?: 3,
+                     may_filter?: 4
     end
   end
 

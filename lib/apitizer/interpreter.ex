@@ -238,19 +238,14 @@ defmodule Apitizer.Interpreter do
     {query, dynamics} = do_apply_filters(query_and_dynamics, and_or, tail, context)
     builder = context.render_tree.builder
 
-    case builder.filter(field, op, value, query, dynamics, and_or, context) do
-      nil ->
-        if attr = builder.__attribute__(field) do
-          {query, interpret_expr(dynamics, and_or, {op, attr.key, value})}
-        else
-          {query, dynamics}
-        end
-
-      {_query, _dynamics} = updated_values ->
-        updated_values
-
-      _ ->
-        {query, dynamics}
+    with true <- builder.may_filter?(field, op, value, context),
+         {:custom, nil} <-
+           {:custom, builder.filter(field, op, value, query, dynamics, and_or, context)},
+         %Attribute{} = attr <- builder.__attribute__(field) do
+      {query, interpret_expr(dynamics, and_or, {op, attr.key, value})}
+    else
+      {:custom, {_query, _dynamics} = updated_query} -> updated_query
+      _ -> {query, dynamics}
     end
   end
 
@@ -285,7 +280,8 @@ defmodule Apitizer.Interpreter do
 
   def apply_sort(query, %{parsed_sort: sorts, render_tree: %{builder: builder}} = context) do
     Enum.reduce(sorts, query, fn {sort_direction, field}, query ->
-      with {:sort, nil} <- {:sort, builder.sort(field, sort_direction, query, context)},
+      with true <- builder.may_sort?(field, sort_direction, context),
+           {:sort, nil} <- {:sort, builder.sort(field, sort_direction, query, context)},
            %Attribute{} = attribute <- builder.__attribute__(field),
            true <- attribute.sortable do
         from(q in query, order_by: [{^sort_direction, field(q, ^attribute.key)}])
