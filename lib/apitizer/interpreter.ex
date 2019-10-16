@@ -29,7 +29,7 @@ defmodule Apitizer.Interpreter do
   @doc """
   TODO
   """
-  @spec one!(module(), Plug.Conn.t(), options) :: map() | nil
+  @spec one!(module(), Plug.Conn.t(), options) :: any | no_return
   def one!(query_builder, id, %Plug.Conn{} = conn, opts \\ [])
       when is_atom(query_builder) and is_list(opts) do
     opts = Keyword.put_new(opts, :repo_function, fn query, %{repo: repo} -> repo.one!(query) end)
@@ -180,7 +180,7 @@ defmodule Apitizer.Interpreter do
           Enum.reduce(fields, [], fn field, acc ->
             with {name, name_alias} <- name_and_alias(field),
                  %Attribute{} = attribute <- query_builder.__attribute__(name),
-                 true <- may_select?(attribute.name, context) do
+                 true <- may_select?(attribute.name, query_builder, context) do
               [%{attribute | alias: name_alias} | acc]
             else
               _ -> acc
@@ -211,9 +211,6 @@ defmodule Apitizer.Interpreter do
       apidoc: (association && association.apidoc) || nil
     }
   end
-
-  defp may_select?(field_or_assoc, %{render_tree: %{builder: builder}} = context),
-    do: builder.may_select?(field_or_assoc, context)
 
   defp may_select?(field_or_assoc, query_builder, context) when is_atom(query_builder),
     do: query_builder.may_select?(field_or_assoc, context)

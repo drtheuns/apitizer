@@ -18,7 +18,8 @@ defmodule Apitizer.Context do
           parsed_sort: [Apitizer.Parser.sort()],
           parsed_select: [Apitizer.Parser.select_field()],
           assigns: map(),
-          max_depth: pos_integer | :infinite
+          max_depth: pos_integer | :infinite,
+          render_tree: nil | Apitizer.RenderTree.t()
         }
 
   defstruct filter_key: nil,

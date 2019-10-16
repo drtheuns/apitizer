@@ -31,7 +31,8 @@ defmodule Apitizer.MixProject do
       {:plug, "~> 1.8"},
       {:ecto, "~> 3.0"},
       {:nimble_parsec, "~> 0.5"},
-      {:ex_doc, "~> 0.21", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.21", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.0.0-rc.6", only: [:dev], runtime: false}
     ]
   end
 end

@@ -15,5 +15,15 @@ defmodule Apitizer.RenderTree do
   The `:key` and `:name` fields are `nil` for the root node.
   """
 
+  @type t :: %__MODULE__{
+          name: String.t(),
+          builder: module(),
+          schema: Ecto.Schema.t(),
+          fields: nil | [Apitizer.Builder.Attribute],
+          key: atom,
+          apidoc: nil | String.t(),
+          children: %{String.t() => t}
+        }
+
   defstruct [:name, :builder, :schema, :fields, :key, :apidoc, children: %{}]
 end

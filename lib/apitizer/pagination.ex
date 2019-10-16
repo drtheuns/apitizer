@@ -39,6 +39,6 @@ defprotocol Apitizer.Pagination do
   This is similar to what a view function might do in Phoenix to generate a
   response from a paginator. This is called _after_ `transform_entries/2`.
   """
-  @spec generate_response(any, Context.t()) :: any
+  @spec generate_response(any, Apitizer.Context.t()) :: any
   def generate_response(transformed_result, context)
 end

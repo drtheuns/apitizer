@@ -54,7 +54,7 @@ defmodule Apitizer.Parser do
   import NimbleParsec
 
   @type filter_and_or :: {:and | :or, [filter_expression | filter_and_or]}
-  @type filter_expression :: {Apitizer.operators(), filter_field, filter_value}
+  @type filter_expression :: {Apitizer.operator(), filter_field, filter_value}
   @type filter_field :: :* | String.t()
   @type filter_value :: String.t() | integer() | float()
 
@@ -75,8 +75,8 @@ defmodule Apitizer.Parser do
   @spec parse_filter(String.t()) :: filter_and_or
   def parse_filter(query_string) do
     case parse(&filter/1, query_string, [[]]) do
-      [] -> []
-      [and_or_expression] -> and_or_expression
+      [{_, _} = and_or_expression] -> and_or_expression
+      _ -> []
     end
   end
 
@@ -116,7 +116,6 @@ defmodule Apitizer.Parser do
   defp parse_or_default({:ok, [], _, _, _, _}, default), do: default
   defp parse_or_default({:ok, fields, _, _, _, _}, _), do: fields
   defp parse_or_default({:ok, value}, _), do: value
-  defp parse_or_default(_, default), do: default
 
   defp sort(query_string) do
     sorts =
