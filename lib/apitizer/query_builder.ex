@@ -298,7 +298,7 @@ defmodule Apitizer.QueryBuilder do
       from(post in Post) |> maybe_join(:comments)
       from(post in Post, join: c in assoc(post, :comments), as: :comments) |> maybe_join(:comments)
   """
-  defmacro maybe_join(query, assoc, as \\ nil) when is_atom(assoc) and is_atom(as) do
+  defmacro ensure_join(query, assoc, as \\ nil) when is_atom(assoc) and is_atom(as) do
     as = as || assoc
 
     quote do
@@ -319,7 +319,8 @@ defmodule Apitizer.QueryBuilder do
 
   ## Example
 
-  Assuming a database model in which a Task can be in a State:
+  Assuming a database model in which a Task can be in a State (e.g. todo,
+  completed, etc):
 
   ```elixir
   defmodule TaskBuilder do
