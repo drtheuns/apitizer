@@ -4,6 +4,7 @@ defmodule Apitizer.Builder do
   # builder modules.
 
   defmodule Attribute do
+    @moduledoc false
     defstruct [
       :name,
       :operators,
@@ -16,18 +17,22 @@ defmodule Apitizer.Builder do
   end
 
   defmodule Association do
+    @moduledoc false
     defstruct [:name, :builder, :key, :apidoc]
   end
 
   defmodule Filter do
+    @moduledoc false
     defstruct [:field, :operator, :apidoc]
   end
 
   defmodule Sort do
+    @moduledoc false
     defstruct [:field, :apidoc]
   end
 
   defmodule Transform do
+    @moduledoc false
     # type: :assocation | :attribute
     defstruct [:field, :type]
   end

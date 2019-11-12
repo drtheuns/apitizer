@@ -1,11 +1,9 @@
 defprotocol Apitizer.Pagination do
   @moduledoc """
-  This protocol should be implemented if the `Apitizer.QueryBuilder.paginate/3`
-  function is used.
+  This protocol should be implemented if the `paginate/2` function on your query
+  builder is used.
 
-  This protocol is responsible for turning a paginated result into a response.
-
-  To turn a query into a paginated response, consult `Apitizer.QueryBuilder.paginate/3`.
+  To turn a query into a paginated response, consult `Apitizer.Interpreter.paginate/3`.
 
   ## Example
 

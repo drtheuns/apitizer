@@ -293,10 +293,10 @@ defmodule Apitizer.QueryBuilder do
 
   ## Example
 
-  In the following code, only a one join will be performed on either query:
+  The following two queries will result in the same query:
 
-      from(post in Post) |> maybe_join(:comments)
-      from(post in Post, join: c in assoc(post, :comments), as: :comments) |> maybe_join(:comments)
+      from(post in Post) |> ensure_join(:comments)
+      from(post in Post, join: c in assoc(post, :comments), as: :comments) |> ensure_join(:comments)
   """
   defmacro ensure_join(query, assoc, as \\ nil) when is_atom(assoc) and is_atom(as) do
     as = as || assoc
@@ -332,7 +332,7 @@ defmodule Apitizer.QueryBuilder do
 
     filter "states", :in, values, query, dynamics, and_or, _context do
       # Ensure the join exists.
-      query = maybe_join(query, :state)
+      query = ensure_join(query, :state)
 
       # Add the WHERE clause.
       dynamics = extend_dynamics(dynamics, and_or, [state: state], state.name in ^values)
@@ -342,8 +342,9 @@ defmodule Apitizer.QueryBuilder do
   end
   ```
 
-  The advantage of this, rather than placing it on the query directly, is that
-  the caller is now free to place this "states" condition anywhere in their query:
+  The advantage of this, rather than applying the filter on the query directly,
+  is that the caller is now free to place this "states" filter anywhere in their
+  query:
 
       /tasks?filter=priority.gte.4,or(time_estimate.lte.60, states.in.(todo,waiting))
 

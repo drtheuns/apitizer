@@ -272,8 +272,8 @@ defmodule Apitizer.Interpreter do
     primary_keys = tree.schema.__schema__(:primary_key)
 
     foreign_keys =
-      Enum.map(tree.children, fn {name, _subtree} ->
-        key = tree.builder.__association__(name).key
+      Enum.map(tree.children, fn {_name, subtree} ->
+        key = tree.builder.__association__(subtree.key).key
         tree.schema.__schema__(:association, key).owner_key
       end)
 
@@ -338,13 +338,13 @@ defmodule Apitizer.Interpreter do
 
   defp transform_associations(result, resource, %{render_tree: tree} = context) do
     Enum.reduce(tree.children, result, fn {name, subtree}, acc ->
-      if may_see?(name, resource, tree.builder, context) do
+      if may_see?(subtree.name, resource, tree.builder, context) do
         value =
           resource
           |> Map.get(subtree.key)
           |> apply_transform(%{context | render_tree: subtree})
 
-        Map.put(acc, subtree.name, tree.builder.transform(name, value, resource, context))
+        Map.put(acc, name, tree.builder.transform(name, value, resource, context))
       else
         acc
       end
