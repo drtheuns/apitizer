@@ -21,7 +21,7 @@ defmodule Apitizer.Parser do
       will happen automatically. So `id.eq.5` and `and(id.eq.5)` are the same.
     * Spaces are optional in most locations.
     * Values can be quoted with `"`. If the value must contain a `"` itself, it
-      can be quoted like: `\\"`
+      can be quoted like: `\\\"`
     * It accepts `:*` as a catch-all field. This can be useful when applying a
       filter to the entire resource, rather than some specific field, for
       example, a search over multiple fields. These types of filters must be

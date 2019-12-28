@@ -2,7 +2,37 @@
 
 Toolkit for simplifying the development of REST API's in Phoenix and Ecto.
 
-# TODO
+## Usage
+
+```elixir
+defmodule MyAppWeb.QueryBuilders.UserBuilder do
+  use Apitizer.QueryBuilder, schema: MyApp.Accounts.User
+  import Ecto.Query
+
+  attribute :id, sortable: true
+  attribute :display_name
+  attribute :email
+  attribute :role
+  attribute :timezone
+
+  association :posts, MyApp.QueryBuilders.PostBuilder
+end
+
+defmodule MyAppWeb.UserController do
+  use MyAppWeb, :controller
+  alias LinkerWeb.QueryBuilders.UserBuilder
+
+  def index(conn, _params, _user) do
+    json(conn, UserBuilder.paginate(conn))
+  end
+
+  def show(conn, %{"id" => id}, _user) do
+    json(conn, UserBuilder.one!(conn, id))
+  end
+end
+```
+
+## TODO
 
 - [X] Add more operators to the filter parser, keep some in reserve (such as
       "search" and other common, custom logic).
